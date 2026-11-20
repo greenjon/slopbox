@@ -14,6 +14,10 @@
  *     -o ID=VALUE              any sb_setting id (see sb_settings.h)
  *     -s MS                    start MS into the file
  *     -F MS                    start a fade-out (Fade on Stop/Pause) after MS
+ *     -M MS                    after MS of output, skip to the next file
+ *                              manually (like pressing Next)
+ *     -X M:ID:IL:OD:OL:MIX     crossfade: mode (0-5), fade-in delay/duration,
+ *                              fade-out delay/duration (s), mix (0/1)
  *
  *   sb_cli -T FILE...                   print tags (sb_read_tags) and exit
  *
@@ -29,11 +33,15 @@
 
 #include "sb_engine.h"
 #include "sb_settings.h"
+#include "sb_pcmbuf.h"
+#include <pthread.h>
 
 static FILE *out;
 static uint32_t frames_out;
 static long start_ms = 0;
 static long fade_at_ms = -1;
+static long skip_at_ms = -1;
+static volatile bool skipped;
 
 static void put_le32(uint8_t *p, uint32_t v)
 { p[0] = v; p[1] = v >> 8; p[2] = v >> 16; p[3] = v >> 24; }
@@ -54,16 +62,34 @@ static void write_header(uint32_t frames)
     fwrite(h, 1, sizeof(h), out);
 }
 
-static bool sink(void *user, const int16_t *pcm, int frames)
+/* The output side: read the PCM buffer as fast as it fills, into the WAV. */
+static void *output_thread(void *arg)
 {
-    (void)user;
-    if (fade_at_ms >= 0 && frames_out >= (uint32_t)(fade_at_ms * (long)sb_output_rate() / 1000)) {
-        sb_fade(false, true);
-        fade_at_ms = -1;
+    (void)arg;
+    int16_t buf[4096 * 2];
+    for (;;) {
+        /* Like real playback, the decoder runs ahead and keeps the buffer full. */
+        while (!sb_pcmbuf_ready())
+            usleep(200);
+        int n = sb_pcmbuf_read(buf, 1024, 200);
+        if (n < 0)
+            break;
+        if (n == 0)
+            continue;
+        if (fade_at_ms >= 0 && frames_out >= (uint32_t)(fade_at_ms * (long)sb_output_rate() / 1000)) {
+            sb_fade(false, true);
+            fade_at_ms = -1;
+        }
+        if (skip_at_ms >= 0 && frames_out >= (uint32_t)(skip_at_ms * (long)sb_output_rate() / 1000)) {
+            skipped = true;
+            sb_stop();
+            skip_at_ms = -1;
+        }
+        sb_output_process(buf, n);
+        fwrite(buf, 4, n, out);  /* host is little-endian */
+        frames_out += n;
     }
-    fwrite(pcm, 4, frames, out);  /* host is little-endian */
-    frames_out += frames;
-    return true;
+    return NULL;
 }
 
 int main(int argc, char **argv)
@@ -87,7 +113,7 @@ int main(int argc, char **argv)
         }
         return 0;
     }
-    while ((opt = getopt(argc, argv, "e:p:x:t:r:v:s:o:F:")) != -1) {
+    while ((opt = getopt(argc, argv, "e:p:x:t:r:v:s:o:F:X:M:")) != -1) {
         switch (opt) {
         case 'e': {
             int b, ty, hz, q, g;
@@ -112,6 +138,18 @@ int main(int argc, char **argv)
         }
         case 's': start_ms = atol(optarg); break;
         case 'F': fade_at_ms = atol(optarg); break;
+        case 'M': skip_at_ms = atol(optarg); break;
+        case 'X': {
+            int m, id, il, od, ol, mx;
+            if (sscanf(optarg, "%d:%d:%d:%d:%d:%d", &m, &id, &il, &od, &ol, &mx) != 6) return 2;
+            sb_setting_set(SB_SET_CROSSFADE_FADE_IN_DELAY, id);
+            sb_setting_set(SB_SET_CROSSFADE_FADE_IN_DURATION, il);
+            sb_setting_set(SB_SET_CROSSFADE_FADE_OUT_DELAY, od);
+            sb_setting_set(SB_SET_CROSSFADE_FADE_OUT_DURATION, ol);
+            sb_setting_set(SB_SET_CROSSFADE_FADE_OUT_MIXMODE, mx);
+            sb_setting_set(SB_SET_CROSSFADE, m);
+            break;
+        }
         default: return 2;
         }
     }
@@ -126,13 +164,21 @@ int main(int argc, char **argv)
 
     struct sb_track_info info;
     int ret = 0;
+    sb_pcmbuf_reset(0, 0);
+    pthread_t th;
+    pthread_create(&th, NULL, output_thread, NULL);
+    bool manual = false;
     for (int i = optind; i < argc - 1 && ret == 0; i++) {
-        uint32_t before = frames_out;
-        ret = sb_play_file(argv[i], i == optind ? start_ms : 0, sink, NULL, &info);
-        fprintf(stderr, "%s - %s [%s, %lu ms] -> %u frames, ret %d\n",
-                info.artist, info.title, info.codec, info.length_ms,
-                frames_out - before, ret);
+        /* Each file follows the last as an automatic track change, unless -M
+         * cut the previous one short (then it's a manual skip). */
+        ret = sb_play_file(argv[i], i == optind ? start_ms : 0, i - optind + 1, !manual, &info);
+        manual = skipped;
+        skipped = false;
+        fprintf(stderr, "%s - %s [%s, %lu ms], ret %d\n",
+                info.artist, info.title, info.codec, info.length_ms, ret);
     }
+    sb_pcmbuf_end_of_stream();
+    pthread_join(th, NULL);
     write_header(frames_out);
     fclose(out);
     return ret == 0 ? 0 : 1;

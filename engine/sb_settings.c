@@ -30,6 +30,7 @@
 
 #include "sb_engine.h"
 #include "sb_settings.h"
+#include "sb_pcmbuf.h"
 
 /* Rockbox's firmware/sound.c reads these. */
 struct system_status global_status;
@@ -67,6 +68,17 @@ static struct eq_band_setting pending_band[EQ_NUM_BANDS];
 static unsigned pending_band_dirty;
 static bool shuffle_on;
 
+static void push_crossfade(void)
+{
+    /* Lock held. The buffer applies these itself, at once. */
+    sb_pcmbuf_set_crossfade(pending_val[SB_SET_CROSSFADE],
+                            pending_val[SB_SET_CROSSFADE_FADE_IN_DELAY],
+                            pending_val[SB_SET_CROSSFADE_FADE_IN_DURATION],
+                            pending_val[SB_SET_CROSSFADE_FADE_OUT_DELAY],
+                            pending_val[SB_SET_CROSSFADE_FADE_OUT_DURATION],
+                            pending_val[SB_SET_CROSSFADE_FADE_OUT_MIXMODE] != 0);
+}
+
 void sb_setting_set(int id, int value)
 {
     if (id < 0 || id >= SB_SET_COUNT)
@@ -74,6 +86,8 @@ void sb_setting_set(int id, int value)
     pthread_mutex_lock(&lock);
     pending_val[id] = value;
     pending_dirty |= 1ull << id;
+    if (id >= SB_SET_CROSSFADE && id <= SB_SET_CROSSFADE_FADE_OUT_MIXMODE)
+        push_crossfade();
     pthread_mutex_unlock(&lock);
 }
 
@@ -95,6 +109,7 @@ void sb_setting_set_shuffle(bool on)
     pthread_mutex_lock(&lock);
     shuffle_on = on;
     pending_dirty |= 1ull << SB_SET_REPLAYGAIN_TYPE;
+    sb_pcmbuf_set_shuffle(on);
     pthread_mutex_unlock(&lock);
 }
 
@@ -228,6 +243,11 @@ static const int defaults[SB_SET_COUNT] = {
     [SB_SET_COMPRESSOR_ATTACK] = 5,
     [SB_SET_COMPRESSOR_RELEASE] = 500,
     [SB_SET_REPLAYGAIN_TYPE] = REPLAYGAIN_SHUFFLE,
+    /* Crossfade off; delays/durations as in settings_list.c. */
+    [SB_SET_CROSSFADE_FADE_IN_DELAY] = 0,
+    [SB_SET_CROSSFADE_FADE_IN_DURATION] = 2,
+    [SB_SET_CROSSFADE_FADE_OUT_DELAY] = 0,
+    [SB_SET_CROSSFADE_FADE_OUT_DURATION] = 2,
 };
 static const struct eq_band_setting default_bands[EQ_NUM_BANDS] = {
     { EQ_FILTER_LOW_SHELF,  32,    7, 0 },
@@ -248,5 +268,8 @@ void sb_settings_init(void)
     memcpy(pending_val, defaults, sizeof(pending_val));
     memcpy(pending_band, default_bands, sizeof(pending_band));
     global_settings.volume_limit = defaults[SB_SET_VOLUME_LIMIT];
+    pthread_mutex_lock(&lock);
+    push_crossfade();
+    pthread_mutex_unlock(&lock);
     sb_settings_reapply_all();
 }

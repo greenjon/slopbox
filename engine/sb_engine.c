@@ -3,7 +3,7 @@
  *
  * Derived from Rockbox's lib/rbcodec/test/warble.c
  * (Copyright (C) 2011 Sean Bartell), changed for SlopBox: no SDL, no
- * command line, a pluggable PCM sink, file-descriptor input, and DSP
+ * command line, output through a PCM buffer (sb_pcmbuf), file-descriptor input, and DSP
  * settings that can be changed from another thread while a file plays.
  *
  * This program is free software; you can redistribute it and/or
@@ -42,6 +42,7 @@
 
 #include "sb_engine.h"
 #include "sb_settings.h"
+#include "sb_pcmbuf.h"
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -108,9 +109,12 @@ static int input_fd = -1;
 static struct codec_api ci;
 static char *input_buffer = NULL;
 
-static sb_pcm_sink cur_sink;
-static void *cur_user;
-static bool sink_stopped;
+/* The track being decoded, and whether it was told to stop. */
+static int cur_serial;
+static bool halted;
+/* A track's start position is a seek the codec makes before decoding; it
+ * mustn't flush the buffer (which may hold the previous track's tail). */
+static bool initial_seek;
 
 static atomic_long codec_action = CODEC_ACTION_NULL;
 static atomic_long codec_action_param = 0;
@@ -170,11 +174,21 @@ static void *ci_codec_get_buffer(size_t *size)
     return buffer;
 }
 
+/* Decoded, DSP-processed audio goes into the PCM buffer. */
 static void emit_pcm(int16_t *pcm, int frames)
 {
-    if (sink_stopped)
+    if (halted)
         return;
-    /* Volume and balance from Rockbox's sound.c, then ducking. */
+    if (!sb_pcmbuf_write(pcm, frames, cur_serial, atomic_load(&elapsed_ms))) {
+        halted = true;
+        atomic_store(&codec_action, CODEC_ACTION_HALT);
+    }
+}
+
+void sb_output_process(int16_t *pcm, int frames)
+{
+    /* Volume and balance from Rockbox's sound.c, ducking, and the pause fade:
+     * applied as audio leaves the buffer, so they act at once. */
     static int last_l = 1, last_r = 1;
     static uint32_t fl = VOL_FACTOR_UNITY, fr = VOL_FACTOR_UNITY;
     int cl, cr;
@@ -203,13 +217,7 @@ static void emit_pcm(int16_t *pcm, int frames)
             pcm[i] = (int16_t)(((int64_t)pcm[i] * a) >> VOL_FRACBITS);
             pcm[i + 1] = (int16_t)(((int64_t)pcm[i + 1] * b) >> VOL_FRACBITS);
         }
-        /* Only store if nobody retargeted meanwhile. */
         atomic_store(&fade_level, level);
-        gl = gr = VOL_FACTOR_UNITY; /* already applied */
-        if (!cur_sink(cur_user, pcm, frames)) {
-            sink_stopped = true;
-            atomic_store(&codec_action, CODEC_ACTION_HALT);
-        }
         return;
     }
     if (level != VOL_FACTOR_UNITY) {
@@ -222,10 +230,6 @@ static void emit_pcm(int16_t *pcm, int frames)
             pcm[i + 1] = (int16_t)(((int64_t)pcm[i + 1] * gr) >> VOL_FRACBITS);
         }
     }
-    if (!cur_sink(cur_user, pcm, frames)) {
-        sink_stopped = true;
-        atomic_store(&codec_action, CODEC_ACTION_HALT);
-    }
 }
 
 static void ci_pcmbuf_insert(const void *ch1, const void *ch2, int count)
@@ -235,7 +239,7 @@ static void ci_pcmbuf_insert(const void *ch1, const void *ch2, int count)
     src.pin[0] = ch1;
     src.pin[1] = ch2;
     src.proc_mask = 0;
-    while (!sink_stopped) {
+    while (!halted) {
         int out_count = MAX(count, 512);
         int16_t buf[2 * out_count];
         struct dsp_buffer dst;
@@ -310,6 +314,10 @@ static bool ci_seek_buffer(size_t newpos)
 static void ci_seek_complete(void)
 {
     dsp_configure(ci.dsp, DSP_FLUSH, 0);
+    if (initial_seek)
+        initial_seek = false;
+    else /* a user seek: what's queued is from the old position */
+        sb_pcmbuf_flush(cur_serial, atomic_load(&codec_action_param));
 }
 
 static void ci_set_offset(size_t value)
@@ -475,6 +483,7 @@ void sb_engine_init(const char *codec_path_fmt)
         global_settings.timestretch_enabled = true;
         dsp_timestretch_enable(true);
         audio_is_initialized = true;
+        sb_pcmbuf_init(DSP_OUT_DEFAULT_HZ);
         sb_settings_init();
         dsp_ready = true;
     }
@@ -549,8 +558,8 @@ int sb_read_tags(int fd, const char *name, struct sb_tags *t)
     return ret;
 }
 
-int sb_play_fd(int fd, const char *name, long start_ms, sb_pcm_sink sink,
-               void *user, struct sb_track_info *info_out)
+int sb_play_fd(int fd, const char *name, long start_ms, int serial,
+               bool auto_skip, struct sb_track_info *info_out)
 {
     if (!dsp_ready)
         return -1;
@@ -575,11 +584,13 @@ int sb_play_fd(int fd, const char *name, long start_ms, sb_pcm_sink sink,
     }
 
     input_fd = fd;
-    cur_sink = sink;
-    cur_user = user;
-    sink_stopped = false;
+    cur_serial = serial;
+    halted = false;
+    initial_seek = start_ms > 0;
     atomic_store(&codec_action, CODEC_ACTION_NULL);
     atomic_store(&elapsed_ms, 0);
+    /* Join to what's queued: gapless, crossfade, or a clean cut. */
+    sb_pcmbuf_begin_track(serial, auto_skip, start_ms > 0 ? start_ms : 0);
     if (start_ms > 0) {
         /* The codec sees this on its first get_command, before decoding. */
         atomic_store(&codec_action_param, start_ms);
@@ -622,7 +633,7 @@ int sb_play_fd(int fd, const char *name, long start_ms, sb_pcm_sink sink,
             ret = -5;
         } else {
             if (c_hdr->run_proc() != CODEC_OK)
-                ret = sink_stopped ? 0 : -6;
+                ret = halted ? 0 : -6;
             c_hdr->entry_point(CODEC_UNLOAD);
         }
     }
@@ -635,13 +646,13 @@ int sb_play_fd(int fd, const char *name, long start_ms, sb_pcm_sink sink,
     return ret;
 }
 
-int sb_play_file(const char *path, long start_ms, sb_pcm_sink sink,
-                 void *user, struct sb_track_info *info_out)
+int sb_play_file(const char *path, long start_ms, int serial, bool auto_skip,
+                 struct sb_track_info *info_out)
 {
     int fd = open(path, O_RDONLY);
     if (fd < 0)
         return -1;
-    int ret = sb_play_fd(fd, path, start_ms, sink, user, info_out);
+    int ret = sb_play_fd(fd, path, start_ms, serial, auto_skip, info_out);
     close(fd);
     return ret;
 }
@@ -659,7 +670,18 @@ void sb_seek_ms(long ms)
 
 long sb_elapsed_ms(void)
 {
-    return atomic_load(&elapsed_ms);
+    int serial;
+    long ms;
+    sb_pcmbuf_position(&serial, &ms);
+    return ms;
+}
+
+int sb_playing_serial(void)
+{
+    int serial;
+    long ms;
+    sb_pcmbuf_position(&serial, &ms);
+    return serial;
 }
 
 void sb_set_tempo(double tempo)

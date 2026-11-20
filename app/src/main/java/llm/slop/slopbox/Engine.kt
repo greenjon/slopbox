@@ -17,15 +17,29 @@ object Engine {
         val bitrate: Int,
     )
 
-    /** Takes ownership of [fd]; [name] is used to detect the format by extension. */
-    fun play(fd: Int, name: String, startMs: Long = 0, paused: Boolean = false): Boolean =
+    /**
+     * Start fresh with this file. Takes ownership of [fd]; [name] picks the codec by
+     * extension. Returns the file's serial (see [trackSerial]), or -1.
+     */
+    fun play(fd: Int, name: String, startMs: Long = 0, paused: Boolean = false): Int =
         nativePlayFd(fd, name, startMs, paused)
+    /**
+     * Manual track change, keeping playback running so the Crossfade setting can
+     * apply (or the old track is cut). Returns the serial, or -1 when nothing is
+     * decoding (use [play]).
+     */
+    fun skipTo(fd: Int, name: String, startMs: Long = 0): Int = nativeSkipTo(fd, name, startMs)
     fun stop() = nativeStop()
-    /** Queue [fd] to start the moment the current track ends (gapless). Takes ownership. */
-    fun queueNext(fd: Int, name: String): Boolean = nativeQueueNext(fd, name)
+    /**
+     * Queue [fd] to follow the file being decoded (gapless or crossfade). Takes
+     * ownership. Returns its serial, or -1.
+     */
+    fun queueNext(fd: Int, name: String): Int = nativeQueueNext(fd, name)
     fun clearNext() = nativeClearNext()
-    /** Changes each time a file starts, including gapless moves to a queued one. */
+    /** Serial of the file being heard now. */
     val trackSerial: Int get() = nativeTrackSerial()
+    /** Serial of the file being decoded (can be ahead of [trackSerial] by the buffer). */
+    val decodeSerial: Int get() = nativeDecodeSerial()
     /** [fade]: Rockbox's Fade on Stop/Pause, a ~1/3 s ramp. */
     fun setPaused(paused: Boolean, fade: Boolean = false) = nativeSetPaused(paused, fade)
     val isPlaying: Boolean get() = nativeIsPlaying()
@@ -78,11 +92,13 @@ object Engine {
     private const val DUCK_DB = -12
 
     private external fun nativeInit()
-    private external fun nativePlayFd(fd: Int, name: String, startMs: Long, paused: Boolean): Boolean
+    private external fun nativePlayFd(fd: Int, name: String, startMs: Long, paused: Boolean): Int
+    private external fun nativeSkipTo(fd: Int, name: String, startMs: Long): Int
     private external fun nativeStop()
-    private external fun nativeQueueNext(fd: Int, name: String): Boolean
+    private external fun nativeQueueNext(fd: Int, name: String): Int
     private external fun nativeClearNext()
     private external fun nativeTrackSerial(): Int
+    private external fun nativeDecodeSerial(): Int
     private external fun nativeSetPaused(paused: Boolean, fade: Boolean)
     private external fun nativeIsPlaying(): Boolean
     private external fun nativeLastResult(): Int

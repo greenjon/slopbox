@@ -13,9 +13,10 @@
 extern "C" {
 #endif
 
-/* Receives interleaved stereo 16-bit PCM at sb_output_rate(). May block (that
- * is how the decoder is paced). Return false to stop decoding. */
-typedef bool (*sb_pcm_sink)(void *user, const int16_t *pcm, int frames);
+/* Output: decoded audio queues in the PCM buffer (sb_pcmbuf.h); an output
+ * thread reads it with sb_pcmbuf_read() and passes each block through
+ * sb_output_process() (volume, balance, ducking, pause fade) before playing it. */
+void sb_output_process(int16_t *pcm, int frames);
 
 struct sb_track_info {
     char title[256];
@@ -32,14 +33,17 @@ struct sb_track_info {
 void sb_engine_init(const char *codec_path_fmt);
 unsigned sb_output_rate(void);
 
-/* Decode one file to the sink, starting start_ms into it. Blocks until the
+/* Decode one file into the PCM buffer, starting start_ms into it. serial
+ * identifies the track for position reporting; auto_skip says whether this is
+ * an automatic track change (gapless/crossfade into what's queued) or a
+ * manual one (crossfade or cut, per the crossfade setting). Blocks until the
  * end, sb_stop() or an error. Returns 0 on success. One file at a time. */
-int sb_play_file(const char *path, long start_ms, sb_pcm_sink sink,
-                 void *user, struct sb_track_info *info_out);
+int sb_play_file(const char *path, long start_ms, int serial, bool auto_skip,
+                 struct sb_track_info *info_out);
 /* Same, from an already-open file descriptor (Android content URIs). The
  * engine does not close fd. name is used for format detection by extension. */
-int sb_play_fd(int fd, const char *name, long start_ms, sb_pcm_sink sink,
-               void *user, struct sb_track_info *info_out);
+int sb_play_fd(int fd, const char *name, long start_ms, int serial,
+               bool auto_skip, struct sb_track_info *info_out);
 
 /* A file's tags as Rockbox's metadata parser (get_metadata) reads them. */
 struct sb_tags {
@@ -65,7 +69,9 @@ int sb_read_tags(int fd, const char *name, struct sb_tags *out);
 /* These may be called from any thread while a file plays. */
 void sb_stop(void);
 void sb_seek_ms(long ms);
+/* What the listener hears now (not what's being decoded). */
 long sb_elapsed_ms(void);
+int sb_playing_serial(void);
 
 /* Rockbox settings (EQ, crossfeed, tone, ...) are in sb_settings.h. */
 

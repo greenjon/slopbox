@@ -19,6 +19,7 @@ add_library(slopbox SHARED
     aaudio_sink.c
     ${ROOT}/engine/sb_engine.c
     ${ROOT}/engine/sb_settings.c
+    ${ROOT}/engine/sb_pcmbuf.c
     # Rockbox's own sound settings code (bass/treble/balance/channels/width).
     ${RB}/firmware/sound.c
     ${RB}/firmware/drivers/audio/audiohw-swcodec.c

@@ -368,6 +368,8 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "pbe precut", "afr enabled", "timestretch enabled", "compressor threshold",
             "compressor makeup gain", "compressor ratio", "compressor knee", "compressor attack time",
             "compressor release time", "replaygain type", "replaygain noclip", "replaygain preamp",
+            "crossfade", "crossfade fade in delay", "crossfade fade in duration",
+            "crossfade fade out delay", "crossfade fade out duration", "crossfade fade out mode",
         ).withIndex().associate { (i, name) -> name to i }
 
         /** Playback Settings that SlopPlayer acts on. */

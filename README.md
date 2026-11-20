@@ -43,14 +43,18 @@ Settings follow Rockbox's rules too: shuffle and Play Selected First reorder
 the playlist like `playlist_randomise()`, Repeat (All/One/Shuffle) steers
 gapless playback, Next/Previous go through `play_hop()` (Skip Length, Skip to
 Outro, Prevent Track Skipping, Rewind Across Tracks), and pausing honours
-Rewind on Pause and Fade on Stop/Pause.
+Rewind on Pause and Fade on Stop/Pause. Crossfade works like Rockbox's
+`pcmbuf.c`: decoded audio queues in a PCM buffer (`engine/sb_pcmbuf.c`) that,
+with crossfade on, runs the fade-out delay + duration + 1 s ahead; at a track
+change the buffered tail is faded out and the new track mixed in, with all six
+modes, both delays and durations, and Mix mode.
 
 ## Layout
 
 | Path | What |
 |---|---|
 | `third_party/rockbox` | Rockbox, unmodified (git submodule) |
-| `engine/` | Playback engine, derived from Rockbox's `warble` test player, and the settings bridge |
+| `engine/` | Playback engine (derived from Rockbox's `warble` test player), PCM buffer with crossfade, settings bridge |
 | `settings-gen/` | Extracts Rockbox's settings and menus into JSON |
 | `host/` | Linux test driver (`sb_cli`): decode to WAV with any DSP setting |
 | `android-native/build_rockbox.sh` | Builds Rockbox's codecs/libraries with the NDK through Rockbox's own `configure` |

@@ -58,9 +58,14 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     /** A seek the engine hasn't reported back yet: report this position meanwhile. */
     private var seekTarget = -1L
     private var seekAt = 0L
-    /** Engine serial of the file playing as [index]. */
-    private var engineSerial = 0
-    /** Entry handed to the engine to follow the current one, if any. */
+    /** Engine serials of the files handed to the engine, and their entries. */
+    private val serialEntries = HashMap<Int, Entry>()
+    /** Serial being heard (that's [index]) and serial being decoded, which can be
+     *  ahead by the PCM buffer -- up to the crossfade length plus a second. */
+    private var playSerial = -1
+    private var decodeSerial = -1
+    private var decodeEntry: Entry? = null
+    /** Entry handed to the engine to follow the one being decoded, if any. */
     private var queuedNext: Entry? = null
 
     // ---- Rockbox Playback Settings -------------------------------------------
@@ -112,11 +117,11 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         }
     }
 
-    /** Index the engine should continue with after this track (automatic change). */
-    private fun followingIndex(): Int? = when {
-        entries.isEmpty() -> null
-        repeat == 2 -> index                       // One
-        index + 1 < entries.size -> index + 1
+    /** Index that follows [from] on an automatic track change. */
+    private fun followingIndex(from: Int = index): Int? = when {
+        entries.isEmpty() || from < 0 -> null
+        repeat == 2 -> from                        // One
+        from + 1 < entries.size -> from + 1
         repeat == 1 -> 0                           // All
         else -> null                               // Off, A-B; Shuffle reshuffles at the end
     }
@@ -200,7 +205,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             // Rockbox "Rewind on Pause" (wps.c pause_action).
             val rewind = setting("rewind duration on pause")
             if (!play && wasPlaying && rewind > 0) {
-                engineSeek((position - rewind * 1000L).coerceAtLeast(0))
+                seekWithin((position - rewind * 1000L).coerceAtLeast(0))
             }
         } else if (play && playbackState == Player.STATE_READY && entries.isNotEmpty()) {
             startCurrent(heldPositionMs)
@@ -236,8 +241,13 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         val (pfd, name) = opened
         queuedNext = null
         seekTarget = -1
-        engineActive = Engine.play(pfd.detachFd(), name, startMs, paused = !playWhenReady)
-        engineSerial = Engine.trackSerial
+        serialEntries.clear()
+        val serial = Engine.play(pfd.detachFd(), name, startMs, paused = !playWhenReady)
+        engineActive = serial >= 0
+        serialEntries[serial] = entry
+        playSerial = serial
+        decodeSerial = serial
+        decodeEntry = entry
         heldPositionMs = startMs
         if (engineActive) {
             queueFollowing()
@@ -245,10 +255,11 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         }
     }
 
-    /** Hand the engine the entry after the current one so it can play it gaplessly. */
+    /** Hand the engine the entry after the one it's decoding (gapless or crossfade). */
     private fun queueFollowing() {
         if (!engineActive) return
-        val next = followingIndex()?.let { entries.getOrNull(it) }
+        val from = decodeEntry?.let { e -> entries.indexOfFirst { it === e } } ?: index
+        val next = followingIndex(from)?.let { entries.getOrNull(it) }
         if (next === queuedNext && next != null) return
         queuedNext = null
         if (next == null) {
@@ -262,11 +273,17 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             Engine.clearNext()
             return
         }
-        if (Engine.queueNext(opened.first.detachFd(), opened.second)) queuedNext = next
+        val serial = Engine.queueNext(opened.first.detachFd(), opened.second)
+        if (serial >= 0) {
+            queuedNext = next
+            serialEntries[serial] = next
+        }
     }
 
     private fun stopEngine() {
         queuedNext = null
+        serialEntries.clear()
+        decodeEntry = null
         if (engineActive) {
             heldPositionMs = Engine.elapsedMs
             Engine.stop()
@@ -314,16 +331,25 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     private val poll = object : Runnable {
         override fun run() {
             if (!engineActive) return
-            val serial = Engine.trackSerial
-            if (serial != engineSerial) {
-                // The engine moved on to the queued entry without a gap.
-                engineSerial = serial
-                val next = queuedNext
-                queuedNext = null
-                val at = if (next != null) entries.indexOf(next) else -1
-                index = if (at >= 0) at else (followingIndex() ?: index)
-                heldPositionMs = 0
+            val d = Engine.decodeSerial
+            if (d != decodeSerial) {
+                // The decoder took the queued file: queue the one after it.
+                decodeSerial = d
+                serialEntries[d]?.let { decodeEntry = it }
+                if (queuedNext === decodeEntry) queuedNext = null
                 queueFollowing()
+            }
+            val p = Engine.trackSerial
+            if (p != playSerial) {
+                // The listener has reached the next file (gapless or crossfade).
+                playSerial = p
+                serialEntries[p]?.let { e ->
+                    val at = entries.indexOfFirst { it === e }
+                    if (at >= 0) index = at
+                }
+                serialEntries.keys.removeAll { it < p - 8 }
+                heldPositionMs = 0
+                seekTarget = -1
                 invalidateState()
             }
             if (seekTarget >= 0) {
@@ -346,7 +372,10 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
                 }
             }
             if (!Engine.isPlaying) {
-                if (Engine.lastResult != 0) Log.w(TAG, "engine error ${Engine.lastResult}; skipping")
+                if (Engine.lastResult != 0) {
+                    Log.w(TAG, "engine error ${Engine.lastResult}; skipping")
+                    decodeEntry?.let { e -> entries.indexOfFirst { it === e }.takeIf { it >= 0 }?.let { index = it } }
+                }
                 engineActive = false
                 advanceAfterEnd()
                 return
@@ -573,6 +602,18 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         seekAt = android.os.SystemClock.uptimeMillis()
     }
 
+    /** Seek in the track being heard. If the decoder has already moved on to the
+     *  next file (the buffer holds this one's end), start this one again there. */
+    private fun seekWithin(ms: Long) {
+        if (Engine.decodeSerial == Engine.trackSerial) {
+            engineSeek(ms)
+        } else {
+            stopEngine()
+            heldPositionMs = ms
+            startCurrent(ms)
+        }
+    }
+
     /**
      * Rockbox gui/wps.c play_hop(): "Skip Length" seconds instead of a track,
      * "Skip to Outro", "Prevent Track Skipping" and "Rewind Across Tracks".
@@ -638,7 +679,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         val pos = if (positionMs == C.TIME_UNSET) 0 else positionMs
         if (playbackState == Player.STATE_ENDED) playbackState = Player.STATE_READY
         if (target == index && engineActive) {
-            engineSeek(pos)
+            seekWithin(pos)
+        } else if (engineActive && playbackState == Player.STATE_READY && skipTo(target, pos)) {
+            // Manual track change through the engine: crossfades if the setting says so.
         } else {
             stopEngine()
             index = target
@@ -647,6 +690,22 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         }
         updateHolds()
         invalidateState()
+    }
+
+    /** Rockbox manual track change, keeping the output going. False if the engine can't. */
+    private fun skipTo(target: Int, pos: Long): Boolean {
+        val entry = entries.getOrNull(target) ?: return false
+        val uri = entry.item.localConfiguration?.uri ?: entry.item.requestMetadata.mediaUri
+        val (pfd, name) = uri?.let { open(it) } ?: return false
+        val serial = Engine.skipTo(pfd.detachFd(), name, pos)
+        if (serial < 0) return false
+        serialEntries[serial] = entry
+        queuedNext = null
+        index = target
+        heldPositionMs = pos
+        seekTarget = pos
+        seekAt = android.os.SystemClock.uptimeMillis()
+        return true
     }
 
     companion object {

@@ -10,11 +10,14 @@
   settings that can't be edited yet (see DIFFERENCES.md).
 - System menu: SlopBox Info, Running Time and Rockbox's other system items
   that make sense on a phone (About, Rockbox Credits and License are in).
+- Database scans save their progress as they go, so closing the app
+  mid-scan doesn't lose it.
 - A signed release build.
 
 ## 1.1
 
 - Voice menus (Rockbox's talk support).
 - Languages other than English (Rockbox's `.lang` files).
+- Faster database scans (5,648 tracks scan acceptably for 1.0).
 - More music plugins: metronome, VU meter / oscilloscope / FFT, pitch
   detector, cue_playlist, vbrfix.

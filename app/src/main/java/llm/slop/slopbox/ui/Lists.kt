@@ -1,3 +1,20 @@
+/*
+ * SlopBox - https://github.com/greenjon/slopbox
+ * Copyright (C) 2026 greenjon and the SlopBox contributors
+ *
+ * Derived from Rockbox (https://www.rockbox.org/):
+ *   cabbiev2 theme by Johannes Voggenthaler, Apoo Maha, Marc Guay, Alex Vanderpol,
+ *   Jerry Lange, Keith Perri, Mark Fawcus and Marianne Arnold, based on Cabbie
+ *   by Yohann Misquitta (Rockbox wps/cabbiev2); icons after the Tango icon set
+ * and the other Rockbox contributors (third_party/rockbox/docs/CREDITS).
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 2 of the License, or (at your option)
+ * any later version.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
 package llm.slop.slopbox.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi

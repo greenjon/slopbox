@@ -1,3 +1,19 @@
+/*
+ * SlopBox - https://github.com/greenjon/slopbox
+ * Copyright (C) 2026 greenjon and the SlopBox contributors
+ *
+ * Derived from Rockbox (https://www.rockbox.org/):
+ *   apps/filetree.c - Copyright (C) 2005 by Björn Stenberg
+ *   apps/recorder/albumart.c - Copyright (C) 2007 Nicolas Pennequin
+ * and the other Rockbox contributors (third_party/rockbox/docs/CREDITS).
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 2 of the License, or (at your option)
+ * any later version.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
 package llm.slop.slopbox.ui
 
 import android.content.Context

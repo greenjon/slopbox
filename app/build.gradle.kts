@@ -63,10 +63,13 @@ android {
     }
 }
 
-// Rockbox's own database menus, shipped as an asset straight from the submodule.
+// Rockbox's own database menus and its credits list, shipped as assets straight
+// from the submodule; and SlopBox's licence, for the About screen.
 val rockboxAssets = layout.buildDirectory.dir("generated/rockboxAssets")
 val copyRockboxAssets by tasks.registering(Copy::class) {
     from(rootProject.file("third_party/rockbox/apps/tagnavi.config"))
+    from(rootProject.file("third_party/rockbox/docs/CREDITS"))
+    from(rootProject.file("LICENSE"))
     into(rockboxAssets.map { it.dir("rockbox") })
 }
 android.sourceSets["main"].assets.srcDir(rockboxAssets)

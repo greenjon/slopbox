@@ -273,8 +273,9 @@ Anything new goes here in the same change that introduces it.
 - **Theme engine.** There is none. SlopBox has a native cabbiev2-style
   interface instead of Rockbox's skins.
 - **Main menu.** It has Rockbox's order, but only the items SlopBox has:
-  no Recording, FM Radio or System menu, and Plugins only once there are
-  plugins.
+  no Recording or FM Radio. Its System menu so far has About SlopBox,
+  Rockbox Credits and License in place of Rockbox Info and the debug
+  screens. SlopBox doesn't use the Rockbox name or logo for itself.
 - **Quick Screen.** It shows Rockbox's four configurable items and uses
   Rockbox's touchscreen rule (a tap in the top, left, right or bottom third
   changes that item; anywhere else leaves), drawn as text rather than with

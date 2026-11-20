@@ -1,11 +1,23 @@
 # SlopBox
 
-An Android music player in the spirit of [Rockbox](https://www.rockbox.org/):
-every setting exposed, nothing hidden for your own good.
+An Android music player with Rockbox's "more is more" approach: every
+setting exposed, nothing hidden for your own good.
+
+**SlopBox is a derivative work (a fork) of [Rockbox](https://www.rockbox.org/),
+the open source firmware for digital audio players. It is not made, endorsed
+or supported by the Rockbox project; please report SlopBox problems here, not
+to them.** It is maintained by [greenjon](https://github.com/greenjon).
 
 SlopBox is a Kotlin app built on Rockbox's own codec and DSP library
 (`lib/rbcodec`), compiled with the Android NDK. The Rockbox source is a git
-submodule in `third_party/rockbox` and is used unmodified; fixes go upstream.
+submodule in `third_party/rockbox` and is used unmodified, with all its
+copyright files and notices. SlopBox source files that port or derive from
+Rockbox code name the Rockbox files and their copyright holders in their
+headers; Rockbox's full contributor list is `third_party/rockbox/docs/CREDITS`
+and is shown in the app (System › Rockbox Credits). The interface follows
+Rockbox's cabbiev2 theme by Johannes Voggenthaler, Apoo Maha, Marc Guay, Alex
+Vanderpol, Jerry Lange, Keith Perri, Mark Fawcus and Marianne Arnold (based on
+Cabbie by Yohann Misquitta).
 
 Much of it is written with AI help, hence the name.
 

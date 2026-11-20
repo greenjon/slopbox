@@ -1,3 +1,19 @@
+/*
+ * SlopBox - https://github.com/greenjon/slopbox
+ * Copyright (C) 2026 greenjon and the SlopBox contributors
+ *
+ * Derived from Rockbox (https://www.rockbox.org/):
+ *   apps/settings.c - Copyright (C) 2002 by Stuart Martin
+ *   apps/settings_list.c - Copyright (C) 2007 Jonathan Gordon
+ * and the other Rockbox contributors (third_party/rockbox/docs/CREDITS).
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 2 of the License, or (at your option)
+ * any later version.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
 package llm.slop.slopbox
 
 import android.content.Context
@@ -280,7 +296,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
     /** Rockbox settings_write_config(): [mode] is SAVE_ALL / SAVE_CHANGED / SAVE_SOUND / SAVE_THEME / SAVE_EQ. */
     fun toCfg(mode: Int): String {
         val sb = StringBuilder()
-        sb.append("# .cfg file created by SlopBox (Rockbox ${catalog.rockboxRevision} settings)\r\n\r\n")
+        sb.append("# .cfg file created by SlopBox (settings from Rockbox ${catalog.rockboxRevision})\r\n\r\n")
         for (s in catalog.settings) {
             val cfg = s.cfg ?: continue
             if (s.has(RbFlags.F_DEPRECATED)) continue

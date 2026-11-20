@@ -2,7 +2,8 @@
  * sb_cli: host-side test driver for the SlopBox engine. Decodes a file
  * through Rockbox codecs + DSP and writes a 16-bit stereo WAV.
  *
- *   sb_cli [options] IN OUT.wav
+ *   sb_cli [options] IN... OUT.wav     (several INs play back to back,
+ *                                       as gapless playback does)
  *     -e BAND:TYPE:HZ:Q:GAIN   EQ band (TYPE 0 low shelf, 1 peak, 2 high
  *                              shelf; Q and GAIN in tenths). Repeatable.
  *     -p PRECUT                EQ precut, tenths of a dB
@@ -79,20 +80,25 @@ int main(int argc, char **argv)
         default: return 2;
         }
     }
-    if (argc != optind + 2) {
-        fprintf(stderr, "usage: %s [options] IN OUT.wav\n", argv[0]);
+    if (argc < optind + 2) {
+        fprintf(stderr, "usage: %s [options] IN... OUT.wav\n", argv[0]);
         return 2;
     }
-    out = fopen(argv[optind + 1], "wb");
-    if (!out) { perror(argv[optind + 1]); return 1; }
+    const char *out_fn = argv[argc - 1];
+    out = fopen(out_fn, "wb");
+    if (!out) { perror(out_fn); return 1; }
     write_header(0);
 
     struct sb_track_info info;
-    int ret = sb_play_file(argv[optind], start_ms, sink, NULL, &info);
+    int ret = 0;
+    for (int i = optind; i < argc - 1 && ret == 0; i++) {
+        uint32_t before = frames_out;
+        ret = sb_play_file(argv[i], i == optind ? start_ms : 0, sink, NULL, &info);
+        fprintf(stderr, "%s - %s [%s, %lu ms] -> %u frames, ret %d\n",
+                info.artist, info.title, info.codec, info.length_ms,
+                frames_out - before, ret);
+    }
     write_header(frames_out);
     fclose(out);
-    fprintf(stderr, "%s - %s [%s, %lu ms] -> %u frames, ret %d\n",
-            info.artist, info.title, info.codec, info.length_ms,
-            frames_out, ret);
     return ret == 0 ? 0 : 1;
 }

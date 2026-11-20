@@ -55,6 +55,10 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     private var engineActive = false
     /** Position to use while the engine isn't active. */
     private var heldPositionMs = 0L
+    /** Engine serial of the file playing as [index]. */
+    private var engineSerial = 0
+    /** Entry handed to the engine to follow the current one, if any. */
+    private var queuedNext: Entry? = null
 
     // ---- Audio focus -------------------------------------------------------
 
@@ -159,12 +163,38 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             return
         }
         val (pfd, name) = opened
+        queuedNext = null
         engineActive = Engine.play(pfd.detachFd(), name, startMs, paused = !playWhenReady)
+        engineSerial = Engine.trackSerial
         heldPositionMs = startMs
-        if (engineActive) startPolling()
+        if (engineActive) {
+            queueFollowing()
+            startPolling()
+        }
+    }
+
+    /** Hand the engine the entry after the current one so it can play it gaplessly. */
+    private fun queueFollowing() {
+        if (!engineActive) return
+        val next = entries.getOrNull(index + 1)
+        if (next === queuedNext) return
+        queuedNext = null
+        if (next == null) {
+            Engine.clearNext()
+            return
+        }
+        val uri = next.item.localConfiguration?.uri ?: next.item.requestMetadata.mediaUri
+        val opened = uri?.let { open(it) }
+        if (opened == null) {
+            // Unopenable: don't queue; the end-of-track path will skip it.
+            Engine.clearNext()
+            return
+        }
+        if (Engine.queueNext(opened.first.detachFd(), opened.second)) queuedNext = next
     }
 
     private fun stopEngine() {
+        queuedNext = null
         if (engineActive) {
             heldPositionMs = Engine.elapsedMs
             Engine.stop()
@@ -206,6 +236,18 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     private val poll = object : Runnable {
         override fun run() {
             if (!engineActive) return
+            val serial = Engine.trackSerial
+            if (serial != engineSerial) {
+                // The engine moved on to the queued entry without a gap.
+                engineSerial = serial
+                val next = queuedNext
+                queuedNext = null
+                val at = if (next != null) entries.indexOf(next) else -1
+                index = if (at >= 0) at else (index + 1).coerceAtMost(entries.size - 1)
+                heldPositionMs = 0
+                queueFollowing()
+                invalidateState()
+            }
             val entry = entries.getOrNull(index)
             if (entry != null && entry.metadata == null) {
                 val info = Engine.trackInfo()
@@ -349,6 +391,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             playbackState = Player.STATE_READY
             if (playWhenReady) startCurrent(0)
         }
+        queueFollowing()
         return Futures.immediateVoidFuture()
     }
 
@@ -369,6 +412,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             index -= toIndex - fromIndex
         }
         updateHolds()
+        queueFollowing()
         return Futures.immediateVoidFuture()
     }
 
@@ -378,6 +422,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         repeat(toIndex - fromIndex) { entries.removeAt(fromIndex) }
         entries.addAll(newIndex.coerceIn(0, entries.size), moved)
         current?.let { index = entries.indexOf(it) }
+        queueFollowing()
         return Futures.immediateVoidFuture()
     }
 

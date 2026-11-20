@@ -15,7 +15,9 @@ Early. Rockbox's codecs and DSP build for Android, and a one-screen app plays
 through them (EQ, crossfeed, tempo). Playback runs in a Media3 session
 service: it keeps playing with the screen off, shows a media notification,
 answers headset/Bluetooth/lock-screen buttons, handles audio focus and pauses
-when headphones are unplugged. Open several files to make a queue.
+when headphones are unplugged. Open several files to make a queue; tracks
+play gaplessly (one audio stream, the next file queued in the engine; MP3
+encoder padding is trimmed by Rockbox's codec).
 
 Tested on a Unihertz Jelly Star (Android 13, arm64).
 

@@ -136,3 +136,8 @@ bool sb_aaudio_write(struct sb_aaudio *a, const int16_t *pcm, int frames)
     }
     return true;
 }
+
+int sb_aaudio_xruns(struct sb_aaudio *a)
+{
+    return (a && a->stream) ? AAudioStream_getXRunCount(a->stream) : 0;
+}

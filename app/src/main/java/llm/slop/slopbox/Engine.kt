@@ -21,6 +21,11 @@ object Engine {
     fun play(fd: Int, name: String, startMs: Long = 0, paused: Boolean = false): Boolean =
         nativePlayFd(fd, name, startMs, paused)
     fun stop() = nativeStop()
+    /** Queue [fd] to start the moment the current track ends (gapless). Takes ownership. */
+    fun queueNext(fd: Int, name: String): Boolean = nativeQueueNext(fd, name)
+    fun clearNext() = nativeClearNext()
+    /** Changes each time a file starts, including gapless moves to a queued one. */
+    val trackSerial: Int get() = nativeTrackSerial()
     fun setPaused(paused: Boolean) = nativeSetPaused(paused)
     val isPlaying: Boolean get() = nativeIsPlaying()
     val lastResult: Int get() = nativeLastResult()
@@ -48,6 +53,9 @@ object Engine {
     private external fun nativeInit()
     private external fun nativePlayFd(fd: Int, name: String, startMs: Long, paused: Boolean): Boolean
     private external fun nativeStop()
+    private external fun nativeQueueNext(fd: Int, name: String): Boolean
+    private external fun nativeClearNext()
+    private external fun nativeTrackSerial(): Int
     private external fun nativeSetPaused(paused: Boolean)
     private external fun nativeIsPlaying(): Boolean
     private external fun nativeLastResult(): Int

@@ -14,4 +14,6 @@ void sb_aaudio_finish(struct sb_aaudio *a);
 void sb_aaudio_set_paused(struct sb_aaudio *a, bool paused);
 /* Make a blocked or future write return false (used to stop playback). */
 void sb_aaudio_abort(struct sb_aaudio *a);
+/* Underruns since the stream opened (gaps heard by the listener). */
+int sb_aaudio_xruns(struct sb_aaudio *a);
 #endif

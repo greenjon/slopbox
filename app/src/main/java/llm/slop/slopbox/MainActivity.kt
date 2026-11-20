@@ -20,6 +20,10 @@ import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.background
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
@@ -48,6 +52,8 @@ class MainActivity : ComponentActivity() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller by mutableStateOf<MediaController?>(null)
     private var ask by mutableStateOf<llm.slop.slopbox.ui.AskRequest?>(null)
+    /** The music folder just changed: ask whether to rebuild the database for it. */
+    private var askInitialize by mutableStateOf<Uri?>(null)
     /** Files to play once the controller connects. */
     private var pending: List<Uri>? = null
     private val nav = Nav()
@@ -66,8 +72,8 @@ class MainActivity : ComponentActivity() {
         val changed = MusicTree.root(this) != tree
         MusicTree.setRoot(this, tree)
         browser.open(this, tree)
-        // The old database points into the old folder.
-        if (changed && TagDb.tracks.isNotEmpty()) TagDb.scan(this, tree, full = true)
+        // Rockbox dirs_to_scan(): new folders -> "Database is not ready / Initialize Now?"
+        if (changed) askInitialize = tree
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,6 +93,21 @@ class MainActivity : ComponentActivity() {
             androidx.compose.foundation.layout.Box {
                 SlopApp(controller, nav, browser, database, pickRoot = { pickRoot.launch(null) })
                 ask?.let { llm.slop.slopbox.ui.AskOverlay(it) }
+                askInitialize?.let { tree ->
+                    val cat = SettingsStore.get(this@MainActivity).catalog
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()
+                        .background(androidx.compose.ui.graphics.Color.Black)
+                        .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing)) {
+                        llm.slop.slopbox.ui.YesNo(cat.str("LANG_TAGCACHE_BUSY"), listOf(cat.str("LANG_TAGCACHE_FORCE_UPDATE"))) { yes ->
+                            askInitialize = null
+                            if (yes) {
+                                TagDb.scan(this@MainActivity, tree, full = true)
+                                android.widget.Toast.makeText(this@MainActivity, cat.str("LANG_TAGCACHE_FORCE_UPDATE_SPLASH"),
+                                    android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }
             }
         }
     }

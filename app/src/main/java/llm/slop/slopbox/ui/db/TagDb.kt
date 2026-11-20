@@ -108,7 +108,10 @@ object TagDb {
 
     fun contains(id: String) = tracks.any { it.id == id }
 
-    /** Non-null while a scan runs: "Scanning… 120 files". */
+    /** Rockbox LANG_BUILDING_DATABASE, without the button hint. */
+    private fun building(n: Int) = "Building database... $n found"
+
+    /** Non-null while a scan runs: "Building database... 120 found". */
     var progress by mutableStateOf<String?>(null)
         private set
 
@@ -127,11 +130,24 @@ object TagDb {
     val scanning: Boolean get() = scanJob?.isActive == true
 
     /** [full]: forget everything and re-read every file (Initialize Now). */
+    private var scanFull = false
+
+    /**
+     * Rockbox tagcache_rebuild() / tagcache_update(): a scan in the
+     * background. An update while one runs is already covered; Initialize
+     * while an update runs starts again as a full rebuild (Rockbox queues it).
+     */
     fun scan(ctx: Context, tree: Uri, full: Boolean) {
-        if (scanning) return
+        val running = scanJob
+        if (running?.isActive == true) {
+            if (!full || scanFull) return
+            running.cancel()
+        }
         val app = ctx.applicationContext
+        scanFull = full
         scanJob = scope.launch {
-            progress = "Scanning…"
+            running?.join()
+            progress = building(0)
             try {
                 // Rockbox "Initialize Now" starts a new database (statistics too);
                 // "Update Now" keeps what it can.
@@ -147,7 +163,7 @@ object TagDb {
                             continue
                         }
                         seen++
-                        if (seen % 10 == 0) progress = "Scanning… $seen files"
+                        if (seen % 10 == 0) progress = building(seen)
                         val prev = old[e.id]
                         out += if (prev != null && prev.modified == e.modified && prev.size == e.size) prev
                         else readTags(app, tree, e, dirId, dirName, "$path/${e.name}", prev?.commitId ?: commit)

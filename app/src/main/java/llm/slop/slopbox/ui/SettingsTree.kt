@@ -167,7 +167,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                 if (tree == null) message = "Choose the music folder first (Select directories to scan)."
                 else {
                     TagDb.scan(ctx, tree, full = item.function == "tagcache_rebuild_with_splash")
-                    toast(item.text)
+                    toast(cat.str("LANG_TAGCACHE_FORCE_UPDATE_SPLASH"))
                 }
             "dirs_to_scan" -> pickRoot()
             null -> when (item.text) {

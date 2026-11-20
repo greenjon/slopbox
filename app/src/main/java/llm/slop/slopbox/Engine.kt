@@ -37,17 +37,16 @@ object Engine {
         return TrackInfo(a[0], a[1], a[2], a[3], a[4].toLong(), a[5].toLong(), a[6].toInt())
     }
 
-    fun setEqEnabled(on: Boolean) = nativeSetEqEnabled(on)
-    /** [q] in tenths, [gain] in tenths of a dB. [type]: 0 low shelf, 1 peak, 2 high shelf. */
-    fun setEqBand(band: Int, type: Int, hz: Int, q: Int, gain: Int) =
-        nativeSetEqBand(band, type, hz, q, gain)
-    fun setEqPrecut(tenthsDb: Int) = nativeSetEqPrecut(tenthsDb)
-    /** 0 off, 1 Meier, 2 custom. */
-    fun setCrossfeed(type: Int) = nativeSetCrossfeed(type)
+    /** A Rockbox setting that reaches the DSP; [id] from [EngineSetting], value as Rockbox stores it. */
+    fun setSetting(id: Int, value: Int) = nativeSetSetting(id, value)
+    /** Rockbox "eq filter N": type 0 low shelf / 1 peak / 2 high shelf, Hz, Q and gain in tenths. */
+    fun setEqBand(band: Int, type: Int, hz: Int, q: Int, gain: Int) = nativeSetEqBand(band, type, hz, q, gain)
+    /** ReplayGain's "track gain if shuffling" mode follows this. */
+    fun setShuffle(on: Boolean) = nativeSetShuffle(on)
     fun setTempo(tempo: Double) = nativeSetTempo(tempo)
     fun setPitch(rate: Double) = nativeSetPitch(rate)
     /** Lower the volume while another app briefly talks over us (navigation etc.). */
-    fun setDuck(duck: Boolean) = nativeSetVolumeDb(if (duck) DUCK_DB else 0)
+    fun setDuck(duck: Boolean) = nativeSetDuckDb(if (duck) DUCK_DB else 0)
     private const val DUCK_DB = -12
 
     private external fun nativeInit()
@@ -62,11 +61,10 @@ object Engine {
     private external fun nativeElapsedMs(): Long
     private external fun nativeSeekMs(ms: Long)
     private external fun nativeTrackInfo(): Array<String>
-    private external fun nativeSetEqEnabled(on: Boolean)
+    private external fun nativeSetSetting(id: Int, value: Int)
     private external fun nativeSetEqBand(band: Int, type: Int, hz: Int, q: Int, gain: Int)
-    private external fun nativeSetEqPrecut(precut: Int)
-    private external fun nativeSetCrossfeed(type: Int)
+    private external fun nativeSetShuffle(on: Boolean)
+    private external fun nativeSetDuckDb(db: Int)
     private external fun nativeSetTempo(tempo: Double)
     private external fun nativeSetPitch(rate: Double)
-    private external fun nativeSetVolumeDb(db: Int)
 }

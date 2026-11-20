@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SettingsStore.get(this) // load the user's Rockbox settings into the engine
         if (savedInstanceState == null) handleIntent(intent)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
@@ -131,9 +132,6 @@ class MainActivity : ComponentActivity() {
         var queue by remember { mutableStateOf("") }
         var isPlaying by remember { mutableStateOf(false) }
         var itemCount by remember { mutableIntStateOf(0) }
-        var bassBoost by remember { mutableStateOf(false) }
-        var crossfeed by remember { mutableStateOf(false) }
-        var tempo by remember { mutableFloatStateOf(1f) }
 
         val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             if (uris.isEmpty()) return@rememberLauncherForActivityResult
@@ -194,25 +192,9 @@ class MainActivity : ComponentActivity() {
                 }) { Text(if (isPlaying) "Pause" else "Play") }
                 Button(enabled = itemCount > 0, onClick = { c?.seekToNext() }) { Text("Next") }
             }
-            Toggle("Bass boost (EQ low shelf +6 dB at 120 Hz)", bassBoost) {
-                bassBoost = it
-                Engine.setEqBand(0, 0, 120, 7, if (it) 60 else 0)
-                Engine.setEqPrecut(if (it) 60 else 0)
-                Engine.setEqEnabled(it)
+            Button(onClick = { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }) {
+                Text(SettingsStore.get(this@MainActivity).catalog.str("LANG_SETTINGS"))
             }
-            Toggle("Crossfeed (Meier)", crossfeed) {
-                crossfeed = it
-                Engine.setCrossfeed(if (it) 1 else 0)
-            }
-            Text("Tempo ${"%.2f".format(tempo)}x (pitch unchanged)")
-            Slider(
-                value = tempo,
-                valueRange = 0.5f..2f,
-                onValueChange = {
-                    tempo = it
-                    Engine.setTempo(it.toDouble())
-                },
-            )
         }
     }
 

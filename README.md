@@ -21,12 +21,32 @@ encoder padding is trimmed by Rockbox's codec).
 
 Tested on a Unihertz Jelly Star (Android 13, arm64).
 
+## Settings, straight from Rockbox
+
+SlopBox's Settings menu is Rockbox's. `settings-gen/` compiles Rockbox's own
+`apps/settings_list.c`, the Settings menus in `apps/menus/` and the value
+formatter (`option_get_valuestring()`) for Rockbox's hosted app target, walks
+the real tables and writes `app/src/main/assets/rockbox_settings.json`: every
+menu, setting, default, range, option and the exact text Rockbox shows for
+each value. Regenerate it after updating the submodule:
+
+```sh
+settings-gen/gen_settings.sh
+```
+
+Settings are stored as a Rockbox-format `config.cfg`, and Manage Settings can
+save and load `.cfg` files that Rockbox itself reads. Sound settings reach the
+DSP the way Rockbox's `settings_apply()` does; bass, treble, balance, channels
+and stereo width go through Rockbox's unmodified `firmware/sound.c`. Settings
+SlopBox doesn't act on yet are shown dimmed and still saved.
+
 ## Layout
 
 | Path | What |
 |---|---|
 | `third_party/rockbox` | Rockbox, unmodified (git submodule) |
-| `engine/` | Playback engine, derived from Rockbox's `warble` test player |
+| `engine/` | Playback engine, derived from Rockbox's `warble` test player, and the settings bridge |
+| `settings-gen/` | Extracts Rockbox's settings and menus into JSON |
 | `host/` | Linux test driver (`sb_cli`): decode to WAV with any DSP setting |
 | `android-native/build_rockbox.sh` | Builds Rockbox's codecs/libraries with the NDK through Rockbox's own `configure` |
 | `app/` | The Android app (Kotlin + Compose, JNI, AAudio output) |

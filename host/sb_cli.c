@@ -4,13 +4,14 @@
  *
  *   sb_cli [options] IN... OUT.wav     (several INs play back to back,
  *                                       as gapless playback does)
- *     -e BAND:TYPE:HZ:Q:GAIN   EQ band (TYPE 0 low shelf, 1 peak, 2 high
+ *     -e BAND:TYPE:HZ:Q:GAIN   EQ band 0-9 (TYPE 0 low shelf, 1 peak, 2 high
  *                              shelf; Q and GAIN in tenths). Repeatable.
  *     -p PRECUT                EQ precut, tenths of a dB
  *     -x TYPE                  crossfeed: 0 off, 1 meier, 2 custom
  *     -t TEMPO                 timestretch, 1.0 = normal
  *     -r RATE                  pitch/speed, 1.0 = normal
- *     -v DB                    volume attenuation, whole dB (<= 0)
+ *     -v DB                    Rockbox volume, dB (-80..0)
+ *     -o ID=VALUE              any sb_setting id (see sb_settings.h)
  *     -s MS                    start MS into the file
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -23,6 +24,7 @@
 #include <unistd.h>
 
 #include "sb_engine.h"
+#include "sb_settings.h"
 
 static FILE *out;
 static uint32_t frames_out;
@@ -59,7 +61,7 @@ int main(int argc, char **argv)
 {
     int opt;
     sb_engine_init(CODEC_PATH_FMT);
-    while ((opt = getopt(argc, argv, "e:p:x:t:r:v:s:")) != -1) {
+    while ((opt = getopt(argc, argv, "e:p:x:t:r:v:s:o:")) != -1) {
         switch (opt) {
         case 'e': {
             int b, ty, hz, q, g;
@@ -67,15 +69,21 @@ int main(int argc, char **argv)
                 fprintf(stderr, "bad -e %s\n", optarg);
                 return 2;
             }
-            sb_set_eq_band(b, ty, hz, q, g);
-            sb_set_eq_enabled(true);
+            sb_setting_set_eq_band(b, ty, hz, q, g);
+            sb_setting_set(SB_SET_EQ_ENABLED, 1);
             break;
         }
-        case 'p': sb_set_eq_precut(atoi(optarg)); break;
-        case 'x': sb_set_crossfeed(atoi(optarg)); break;
+        case 'p': sb_setting_set(SB_SET_EQ_PRECUT, atoi(optarg)); break;
+        case 'x': sb_setting_set(SB_SET_CROSSFEED, atoi(optarg)); break;
         case 't': sb_set_tempo(atof(optarg)); break;
         case 'r': sb_set_pitch(atof(optarg)); break;
-        case 'v': sb_set_volume_db(atoi(optarg)); break;
+        case 'v': sb_setting_set(SB_SET_VOLUME, atoi(optarg)); break;
+        case 'o': {
+            int id, val;
+            if (sscanf(optarg, "%d=%d", &id, &val) != 2) return 2;
+            sb_setting_set(id, val);
+            break;
+        }
         case 's': start_ms = atol(optarg); break;
         default: return 2;
         }

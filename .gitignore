@@ -11,3 +11,4 @@ key.properties
 host/sb_cli
 .idea/
 *.iml
+build-settings/

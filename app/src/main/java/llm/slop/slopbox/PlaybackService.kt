@@ -20,6 +20,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        SettingsStore.get(this) // the user's Rockbox settings, applied to the engine
         val player = SlopPlayer(this)
         val openApp = PendingIntent.getActivity(
             this, 0,

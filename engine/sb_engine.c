@@ -41,6 +41,7 @@
 #include "platform.h"
 
 #include "sb_engine.h"
+#include "sb_settings.h"
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -115,62 +116,44 @@ static atomic_long codec_action = CODEC_ACTION_NULL;
 static atomic_long codec_action_param = 0;
 static atomic_long elapsed_ms = 0;
 
-/* Settings requested from other threads, applied on the decode thread. */
-#define DIRTY_EQ_ENABLE   (1u << 0)
-#define DIRTY_EQ_BANDS    (1u << 1)
-#define DIRTY_EQ_PRECUT   (1u << 2)
-#define DIRTY_CROSSFEED   (1u << 3)
-#define DIRTY_TEMPO       (1u << 4)
-#define DIRTY_PITCH       (1u << 5)
-#define DIRTY_DITHER      (1u << 6)
+/* Rockbox's firmware/sound.c checks this before touching the "hardware". */
+bool audio_is_initialized = false;
 
-static pthread_mutex_t settings_lock = PTHREAD_MUTEX_INITIALIZER;
-static struct {
-    unsigned dirty;
-    unsigned dirty_bands;
-    bool eq_on;
-    struct eq_band_setting bands[EQ_NUM_BANDS];
-    int precut;
-    int crossfeed;
-    double tempo;
-    double pitch;
-    bool dither;
-} pending = { .tempo = 1.0, .pitch = 1.0 };
+/* Tempo and pitch (Rockbox's pitch screen, not a .cfg setting). */
+static pthread_mutex_t speed_lock = PTHREAD_MUTEX_INITIALIZER;
+static double pending_tempo = 1.0, pending_pitch = 1.0;
+static bool speed_dirty = true;
 
-/* Volume as a 1.31 fixed-point factor, applied to the DSP output. */
+/* Extra attenuation for ducking, as a 1.31 fixed-point factor. */
 #define VOL_FRACBITS 31
 #define VOL_FACTOR_UNITY (1u << VOL_FRACBITS)
-static atomic_uint vol_factor = VOL_FACTOR_UNITY;
+static atomic_uint duck_factor = VOL_FACTOR_UNITY;
 
 static void apply_pending_settings(void)
 {
-    pthread_mutex_lock(&settings_lock);
-    unsigned dirty = pending.dirty;
-    unsigned dirty_bands = pending.dirty_bands;
-    pending.dirty = 0;
-    pending.dirty_bands = 0;
-    typeof(pending) s = pending;
-    pthread_mutex_unlock(&settings_lock);
-
-    if (!dirty)
-        return;
-    if (dirty & DIRTY_EQ_BANDS) {
-        for (int b = 0; b < EQ_NUM_BANDS; b++)
-            if (dirty_bands & (1u << b))
-                dsp_set_eq_coefs(b, &s.bands[b]);
+    sb_settings_apply_pending();
+    pthread_mutex_lock(&speed_lock);
+    bool dirty = speed_dirty;
+    double tempo = pending_tempo, pitch = pending_pitch;
+    speed_dirty = false;
+    pthread_mutex_unlock(&speed_lock);
+    if (dirty) {
+        dsp_set_timestretch((int32_t)(tempo * PITCH_SPEED_100));
+        dsp_set_pitch((int32_t)(pitch * PITCH_SPEED_100));
     }
-    if (dirty & DIRTY_EQ_PRECUT)
-        dsp_set_eq_precut(s.precut);
-    if (dirty & DIRTY_EQ_ENABLE)
-        dsp_eq_enable(s.eq_on);
-    if (dirty & DIRTY_CROSSFEED)
-        dsp_set_crossfeed_type(s.crossfeed);
-    if (dirty & DIRTY_TEMPO)
-        dsp_set_timestretch((int32_t)(s.tempo * PITCH_SPEED_100));
-    if (dirty & DIRTY_PITCH)
-        dsp_set_pitch((int32_t)(s.pitch * PITCH_SPEED_100));
-    if (dirty & DIRTY_DITHER)
-        dsp_dither_enable(s.dither);
+}
+
+/* Centibels to a 1.31 factor (<= unity; Rockbox volume never boosts). */
+static uint32_t cb_to_factor(int cb)
+{
+    if (cb >= 0)
+        return VOL_FACTOR_UNITY;
+    if (cb <= -1000)
+        return 0;
+    double f = 1.0;
+    for (int i = 0; i > cb; i--)
+        f *= 0.98855309465693886; /* -0.1 dB */
+    return (uint32_t)(f * VOL_FACTOR_UNITY);
 }
 
 /***************** Codec API *****************/
@@ -186,10 +169,25 @@ static void emit_pcm(int16_t *pcm, int frames)
 {
     if (sink_stopped)
         return;
-    uint32_t f = atomic_load(&vol_factor);
-    if (f != VOL_FACTOR_UNITY) {
-        for (int i = 0; i < frames * 2; i++)
-            pcm[i] = (int16_t)(((int64_t)pcm[i] * f) >> VOL_FRACBITS);
+    /* Volume and balance from Rockbox's sound.c, then ducking. */
+    static int last_l = 1, last_r = 1;
+    static uint32_t fl = VOL_FACTOR_UNITY, fr = VOL_FACTOR_UNITY;
+    int cl, cr;
+    sb_settings_output_gain_cb(&cl, &cr);
+    if (cl != last_l || cr != last_r) {
+        fl = cb_to_factor(cl);
+        fr = cb_to_factor(cr);
+        last_l = cl;
+        last_r = cr;
+    }
+    uint32_t duck = atomic_load(&duck_factor);
+    uint32_t gl = (uint32_t)(((uint64_t)fl * duck) >> VOL_FRACBITS);
+    uint32_t gr = (uint32_t)(((uint64_t)fr * duck) >> VOL_FRACBITS);
+    if (gl != VOL_FACTOR_UNITY || gr != VOL_FACTOR_UNITY) {
+        for (int i = 0; i < frames * 2; i += 2) {
+            pcm[i] = (int16_t)(((int64_t)pcm[i] * gl) >> VOL_FRACBITS);
+            pcm[i + 1] = (int16_t)(((int64_t)pcm[i + 1] * gr) >> VOL_FRACBITS);
+        }
     }
     if (!cur_sink(cur_user, pcm, frames)) {
         sink_stopped = true;
@@ -443,6 +441,8 @@ void sb_engine_init(const char *codec_path_fmt)
         memset(&global_settings, 0, sizeof(global_settings));
         global_settings.timestretch_enabled = true;
         dsp_timestretch_enable(true);
+        audio_is_initialized = true;
+        sb_settings_init();
         dsp_ready = true;
     }
 }
@@ -504,10 +504,10 @@ int sb_play_fd(int fd, const char *name, long start_ms, sb_pcm_sink sink,
     dsp_configure(ci.dsp, DSP_RESET, 0);
 
     /* Re-apply every setting: DSP_RESET may have cleared some. */
-    pthread_mutex_lock(&settings_lock);
-    pending.dirty = ~0u;
-    pending.dirty_bands = (1u << EQ_NUM_BANDS) - 1;
-    pthread_mutex_unlock(&settings_lock);
+    sb_settings_reapply_all();
+    pthread_mutex_lock(&speed_lock);
+    speed_dirty = true;
+    pthread_mutex_unlock(&speed_lock);
     apply_pending_settings();
 
     char path[MAX_PATH + 64];
@@ -571,74 +571,23 @@ long sb_elapsed_ms(void)
     return atomic_load(&elapsed_ms);
 }
 
-void sb_set_eq_enabled(bool on)
-{
-    pthread_mutex_lock(&settings_lock);
-    pending.eq_on = on;
-    pending.dirty |= DIRTY_EQ_ENABLE;
-    pthread_mutex_unlock(&settings_lock);
-}
-
-void sb_set_eq_band(int band, int type, int cutoff_hz, int q, int gain)
-{
-    if (band < 0 || band >= EQ_NUM_BANDS)
-        return;
-    pthread_mutex_lock(&settings_lock);
-    pending.bands[band].type = (enum eq_filter_type)type;
-    pending.bands[band].cutoff = cutoff_hz;
-    pending.bands[band].q = q;
-    pending.bands[band].gain = gain;
-    pending.dirty |= DIRTY_EQ_BANDS;
-    pending.dirty_bands |= 1u << band;
-    pthread_mutex_unlock(&settings_lock);
-}
-
-void sb_set_eq_precut(int precut)
-{
-    pthread_mutex_lock(&settings_lock);
-    pending.precut = precut;
-    pending.dirty |= DIRTY_EQ_PRECUT;
-    pthread_mutex_unlock(&settings_lock);
-}
-
-void sb_set_crossfeed(int type)
-{
-    pthread_mutex_lock(&settings_lock);
-    pending.crossfeed = type;
-    pending.dirty |= DIRTY_CROSSFEED;
-    pthread_mutex_unlock(&settings_lock);
-}
-
 void sb_set_tempo(double tempo)
 {
-    pthread_mutex_lock(&settings_lock);
-    pending.tempo = tempo;
-    pending.dirty |= DIRTY_TEMPO;
-    pthread_mutex_unlock(&settings_lock);
+    pthread_mutex_lock(&speed_lock);
+    pending_tempo = tempo;
+    speed_dirty = true;
+    pthread_mutex_unlock(&speed_lock);
 }
 
 void sb_set_pitch(double rate)
 {
-    pthread_mutex_lock(&settings_lock);
-    pending.pitch = rate;
-    pending.dirty |= DIRTY_PITCH;
-    pthread_mutex_unlock(&settings_lock);
+    pthread_mutex_lock(&speed_lock);
+    pending_pitch = rate;
+    speed_dirty = true;
+    pthread_mutex_unlock(&speed_lock);
 }
 
-void sb_set_volume_db(int db)
+void sb_set_duck_db(int db)
 {
-    if (db > 0)
-        db = 0;
-    double f = 1.0;
-    for (int i = 0; i > db; i--)
-        f *= 0.8912509381337456; /* -1 dB */
-    atomic_store(&vol_factor, (unsigned)(f * VOL_FACTOR_UNITY));
-}
-
-void sb_set_dither(bool on)
-{
-    pthread_mutex_lock(&settings_lock);
-    pending.dither = on;
-    pending.dirty |= DIRTY_DITHER;
-    pthread_mutex_unlock(&settings_lock);
+    atomic_store(&duck_factor, cb_to_factor(db * 10));
 }

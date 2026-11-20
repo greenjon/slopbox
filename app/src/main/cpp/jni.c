@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include "sb_engine.h"
+#include "sb_settings.h"
 #include "aaudio_sink.h"
 
 #define LOG(...) __android_log_print(ANDROID_LOG_INFO, "SlopBox", __VA_ARGS__)
@@ -218,32 +219,25 @@ Java_llm_slop_slopbox_Engine_nativeTrackInfo(JNIEnv *env, jobject thiz)
 }
 
 JNIEXPORT void JNICALL
-Java_llm_slop_slopbox_Engine_nativeSetEqEnabled(JNIEnv *env, jobject thiz,
-                                                        jboolean on)
+Java_llm_slop_slopbox_Engine_nativeSetSetting(JNIEnv *env, jobject thiz,
+                                              jint id, jint value)
 {
-    sb_set_eq_enabled(on);
+    sb_setting_set(id, value);
 }
 
 JNIEXPORT void JNICALL
 Java_llm_slop_slopbox_Engine_nativeSetEqBand(JNIEnv *env, jobject thiz,
-                                                     jint band, jint type,
-                                                     jint hz, jint q, jint gain)
+                                             jint band, jint type, jint hz,
+                                             jint q, jint gain)
 {
-    sb_set_eq_band(band, type, hz, q, gain);
+    sb_setting_set_eq_band(band, type, hz, q, gain);
 }
 
 JNIEXPORT void JNICALL
-Java_llm_slop_slopbox_Engine_nativeSetEqPrecut(JNIEnv *env, jobject thiz,
-                                                       jint precut)
+Java_llm_slop_slopbox_Engine_nativeSetShuffle(JNIEnv *env, jobject thiz,
+                                              jboolean on)
 {
-    sb_set_eq_precut(precut);
-}
-
-JNIEXPORT void JNICALL
-Java_llm_slop_slopbox_Engine_nativeSetCrossfeed(JNIEnv *env, jobject thiz,
-                                                        jint type)
-{
-    sb_set_crossfeed(type);
+    sb_setting_set_shuffle(on);
 }
 
 JNIEXPORT void JNICALL
@@ -261,9 +255,9 @@ Java_llm_slop_slopbox_Engine_nativeSetPitch(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT void JNICALL
-Java_llm_slop_slopbox_Engine_nativeSetVolumeDb(JNIEnv *env, jobject thiz, jint db)
+Java_llm_slop_slopbox_Engine_nativeSetDuckDb(JNIEnv *env, jobject thiz, jint db)
 {
-    sb_set_volume_db(db);
+    sb_set_duck_db(db);
 }
 
 /* Queue the file to play right after the current one (gapless). Replaces any

@@ -35,8 +35,11 @@ FW_OBJS := $(addprefix $(BUILD)/lib/rbcodec/test/../../../firmware/, \
 LIBS := $(BUILD)/lib/librbcodec.a $(BUILD)/lib/libfixedpoint.a \
         $(BUILD)/lib/libtlsf.a -lm -ldl -lpthread
 
-sb_cli: sb_cli.c $(ROOT)/engine/sb_engine.c $(ROOT)/engine/sb_engine.h
-	$(CC) $(CFLAGS) $(DEFS) $(INCS) -o $@ sb_cli.c $(ROOT)/engine/sb_engine.c \
+ENGINE := $(ROOT)/engine/sb_engine.c $(ROOT)/engine/sb_settings.c \
+          $(RB)/firmware/sound.c $(RB)/firmware/drivers/audio/audiohw-swcodec.c
+
+sb_cli: sb_cli.c $(ENGINE) $(ROOT)/engine/sb_engine.h $(ROOT)/engine/sb_settings.h
+	$(CC) $(CFLAGS) $(DEFS) $(INCS) -o $@ sb_cli.c $(ENGINE) \
 	    $(FW_OBJS) $(LIBS)
 
 rockbox:

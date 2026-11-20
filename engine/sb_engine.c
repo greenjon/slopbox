@@ -124,6 +124,11 @@ static pthread_mutex_t speed_lock = PTHREAD_MUTEX_INITIALIZER;
 static double pending_tempo = 1.0, pending_pitch = 1.0;
 static bool speed_dirty = true;
 
+/* Fade on Stop/Pause: like Rockbox's pcmbuf_fade_tick(), a linear ramp over
+ * ~1/3 second for the full range. Level and target are 1.31 factors. */
+static atomic_uint fade_level = 1u << 31;
+static atomic_uint fade_target = 1u << 31;
+
 /* Extra attenuation for ducking, as a 1.31 fixed-point factor. */
 #define VOL_FRACBITS 31
 #define VOL_FACTOR_UNITY (1u << VOL_FRACBITS)
@@ -183,6 +188,34 @@ static void emit_pcm(int16_t *pcm, int frames)
     uint32_t duck = atomic_load(&duck_factor);
     uint32_t gl = (uint32_t)(((uint64_t)fl * duck) >> VOL_FRACBITS);
     uint32_t gr = (uint32_t)(((uint64_t)fr * duck) >> VOL_FRACBITS);
+    uint32_t level = atomic_load(&fade_level);
+    uint32_t target = atomic_load(&fade_target);
+    if (level != target) {
+        /* Ramp per frame. */
+        uint32_t step = VOL_FACTOR_UNITY / (DSP_OUT_DEFAULT_HZ / 3);
+        for (int i = 0; i < frames * 2; i += 2) {
+            if (level < target)
+                level += MIN(step, target - level);
+            else if (level > target)
+                level -= MIN(step, level - target);
+            uint32_t a = (uint32_t)(((uint64_t)gl * level) >> VOL_FRACBITS);
+            uint32_t b = (uint32_t)(((uint64_t)gr * level) >> VOL_FRACBITS);
+            pcm[i] = (int16_t)(((int64_t)pcm[i] * a) >> VOL_FRACBITS);
+            pcm[i + 1] = (int16_t)(((int64_t)pcm[i + 1] * b) >> VOL_FRACBITS);
+        }
+        /* Only store if nobody retargeted meanwhile. */
+        atomic_store(&fade_level, level);
+        gl = gr = VOL_FACTOR_UNITY; /* already applied */
+        if (!cur_sink(cur_user, pcm, frames)) {
+            sink_stopped = true;
+            atomic_store(&codec_action, CODEC_ACTION_HALT);
+        }
+        return;
+    }
+    if (level != VOL_FACTOR_UNITY) {
+        gl = (uint32_t)(((uint64_t)gl * level) >> VOL_FRACBITS);
+        gr = (uint32_t)(((uint64_t)gr * level) >> VOL_FRACBITS);
+    }
     if (gl != VOL_FACTOR_UNITY || gr != VOL_FACTOR_UNITY) {
         for (int i = 0; i < frames * 2; i += 2) {
             pcm[i] = (int16_t)(((int64_t)pcm[i] * gl) >> VOL_FRACBITS);
@@ -590,4 +623,22 @@ void sb_set_pitch(double rate)
 void sb_set_duck_db(int db)
 {
     atomic_store(&duck_factor, cb_to_factor(db * 10));
+}
+
+void sb_fade(bool in, bool ramp)
+{
+    uint32_t t = in ? VOL_FACTOR_UNITY : 0;
+    atomic_store(&fade_target, t);
+    if (!ramp)
+        atomic_store(&fade_level, t);
+}
+
+bool sb_fade_done(void)
+{
+    return atomic_load(&fade_level) == atomic_load(&fade_target);
+}
+
+bool sb_fade_silent(void)
+{
+    return atomic_load(&fade_level) == 0;
 }

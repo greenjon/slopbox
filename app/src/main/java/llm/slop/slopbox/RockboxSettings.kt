@@ -321,7 +321,8 @@ class SettingsStore private constructor(private val context: Context, val catalo
     // ---- Engine ----------------------------------------------------------------
 
     /** Is this setting wired to anything in SlopBox yet? */
-    fun isLive(s: RbSetting): Boolean = s.cfg in ENGINE_IDS || s.cfg?.startsWith("eq filter ") == true
+    fun isLive(s: RbSetting): Boolean =
+        s.cfg in ENGINE_IDS || s.cfg in PLAYER_SETTINGS || s.cfg?.startsWith("eq filter ") == true
 
     fun applyAllToEngine() {
         for (s in catalog.settings) applyToEngine(s)
@@ -368,6 +369,12 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "compressor makeup gain", "compressor ratio", "compressor knee", "compressor attack time",
             "compressor release time", "replaygain type", "replaygain noclip", "replaygain preamp",
         ).withIndex().associate { (i, name) -> name to i }
+
+        /** Playback Settings that SlopPlayer acts on. */
+        val PLAYER_SETTINGS = setOf(
+            "shuffle", "repeat", "play selected", "volume fade", "skip length",
+            "prevent track skip", "rewind across tracks", "rewind duration on pause",
+        )
 
         @Volatile private var instance: SettingsStore? = null
 

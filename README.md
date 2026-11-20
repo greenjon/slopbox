@@ -38,7 +38,12 @@ Settings are stored as a Rockbox-format `config.cfg`, and Manage Settings can
 save and load `.cfg` files that Rockbox itself reads. Sound settings reach the
 DSP the way Rockbox's `settings_apply()` does; bass, treble, balance, channels
 and stereo width go through Rockbox's unmodified `firmware/sound.c`. Settings
-SlopBox doesn't act on yet are shown dimmed and still saved.
+SlopBox doesn't act on yet are shown dimmed and still saved. Playback
+Settings follow Rockbox's rules too: shuffle and Play Selected First reorder
+the playlist like `playlist_randomise()`, Repeat (All/One/Shuffle) steers
+gapless playback, Next/Previous go through `play_hop()` (Skip Length, Skip to
+Outro, Prevent Track Skipping, Rewind Across Tracks), and pausing honours
+Rewind on Pause and Fade on Stop/Pause.
 
 ## Layout
 

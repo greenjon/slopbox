@@ -61,9 +61,17 @@ static void free_job(struct play_job *job)
     free(job);
 }
 
+/* Fade on Stop/Pause: pause the stream once the fade-out has gone silent. */
+static atomic_bool pause_after_fade = false;
+
 static bool sink(void *user, const int16_t *pcm, int frames)
 {
-    return sb_aaudio_write((struct sb_aaudio *)user, pcm, frames);
+    struct sb_aaudio *a = user;
+    if (atomic_load(&pause_after_fade) && sb_fade_silent()) {
+        atomic_store(&pause_after_fade, false);
+        sb_aaudio_set_paused(a, true);
+    }
+    return sb_aaudio_write(a, pcm, frames);
 }
 
 static void *player_main(void *arg)
@@ -140,6 +148,9 @@ Java_llm_slop_slopbox_Engine_nativePlayFd(JNIEnv *env, jobject thiz,
     memset(&info, 0, sizeof(info));
     out = sb_aaudio_open((int)sb_output_rate());
     atomic_store(&paused, start_paused);
+    atomic_store(&pause_after_fade, false);
+    /* Starting paused leaves the level down so resuming can fade in. */
+    sb_fade(!start_paused, false);
     if (out && start_paused)
         sb_aaudio_set_paused(out, true);
     atomic_store(&playing, true);
@@ -162,14 +173,26 @@ Java_llm_slop_slopbox_Engine_nativeStop(JNIEnv *env, jobject thiz)
     pthread_mutex_unlock(&player_lock);
 }
 
+/* Pause or resume; with fade, like Rockbox's audio_on_pause() + pcmbuf_fade(). */
 JNIEXPORT void JNICALL
 Java_llm_slop_slopbox_Engine_nativeSetPaused(JNIEnv *env, jobject thiz,
-                                                      jboolean p)
+                                             jboolean p, jboolean fade)
 {
     pthread_mutex_lock(&player_lock);
     atomic_store(&paused, p);
-    if (out)
-        sb_aaudio_set_paused(out, p);
+    if (p) {
+        sb_fade(false, fade);
+        if (fade && out) {
+            atomic_store(&pause_after_fade, true);
+        } else if (out) {
+            sb_aaudio_set_paused(out, true);
+        }
+    } else {
+        atomic_store(&pause_after_fade, false);
+        sb_fade(true, fade);
+        if (out)
+            sb_aaudio_set_paused(out, false);
+    }
     pthread_mutex_unlock(&player_lock);
 }
 

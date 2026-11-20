@@ -26,7 +26,8 @@ object Engine {
     fun clearNext() = nativeClearNext()
     /** Changes each time a file starts, including gapless moves to a queued one. */
     val trackSerial: Int get() = nativeTrackSerial()
-    fun setPaused(paused: Boolean) = nativeSetPaused(paused)
+    /** [fade]: Rockbox's Fade on Stop/Pause, a ~1/3 s ramp. */
+    fun setPaused(paused: Boolean, fade: Boolean = false) = nativeSetPaused(paused, fade)
     val isPlaying: Boolean get() = nativeIsPlaying()
     val lastResult: Int get() = nativeLastResult()
     val elapsedMs: Long get() = nativeElapsedMs()
@@ -55,7 +56,7 @@ object Engine {
     private external fun nativeQueueNext(fd: Int, name: String): Boolean
     private external fun nativeClearNext()
     private external fun nativeTrackSerial(): Int
-    private external fun nativeSetPaused(paused: Boolean)
+    private external fun nativeSetPaused(paused: Boolean, fade: Boolean)
     private external fun nativeIsPlaying(): Boolean
     private external fun nativeLastResult(): Int
     private external fun nativeElapsedMs(): Long

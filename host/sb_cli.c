@@ -13,6 +13,7 @@
  *     -v DB                    Rockbox volume, dB (-80..0)
  *     -o ID=VALUE              any sb_setting id (see sb_settings.h)
  *     -s MS                    start MS into the file
+ *     -F MS                    start a fade-out (Fade on Stop/Pause) after MS
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -29,6 +30,7 @@
 static FILE *out;
 static uint32_t frames_out;
 static long start_ms = 0;
+static long fade_at_ms = -1;
 
 static void put_le32(uint8_t *p, uint32_t v)
 { p[0] = v; p[1] = v >> 8; p[2] = v >> 16; p[3] = v >> 24; }
@@ -52,6 +54,10 @@ static void write_header(uint32_t frames)
 static bool sink(void *user, const int16_t *pcm, int frames)
 {
     (void)user;
+    if (fade_at_ms >= 0 && frames_out >= (uint32_t)(fade_at_ms * (long)sb_output_rate() / 1000)) {
+        sb_fade(false, true);
+        fade_at_ms = -1;
+    }
     fwrite(pcm, 4, frames, out);  /* host is little-endian */
     frames_out += frames;
     return true;
@@ -61,7 +67,7 @@ int main(int argc, char **argv)
 {
     int opt;
     sb_engine_init(CODEC_PATH_FMT);
-    while ((opt = getopt(argc, argv, "e:p:x:t:r:v:s:o:")) != -1) {
+    while ((opt = getopt(argc, argv, "e:p:x:t:r:v:s:o:F:")) != -1) {
         switch (opt) {
         case 'e': {
             int b, ty, hz, q, g;
@@ -85,6 +91,7 @@ int main(int argc, char **argv)
             break;
         }
         case 's': start_ms = atol(optarg); break;
+        case 'F': fade_at_ms = atol(optarg); break;
         default: return 2;
         }
     }

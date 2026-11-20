@@ -51,6 +51,12 @@ long sb_elapsed_ms(void);
 /* Rockbox's pitch screen: 1.0 = normal. Tempo changes speed, not pitch. */
 void sb_set_tempo(double tempo);
 void sb_set_pitch(double rate);
+/* Fade on Stop/Pause: ramp the output in or out over ~1/3 second (Rockbox's
+ * pcmbuf_fade), or jump there when ramp is false. */
+void sb_fade(bool in, bool ramp);
+bool sb_fade_done(void);
+bool sb_fade_silent(void);
+
 /* Temporary attenuation while another app talks over us (0 or negative dB). */
 void sb_set_duck_db(int db);
 

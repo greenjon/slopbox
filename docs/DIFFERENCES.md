@@ -248,6 +248,17 @@ Anything new goes here in the same change that introduces it.
   imports (`folder_advance_list.txt`) and the optional
   `folder_advance_dir.txt` sit at the top of the music folder, not in
   `/.rockbox/`. Scanning covers the music folder rather than the whole disk.
+- **LRC Player.** Lyrics files are looked for as Rockbox does (the track's
+  folder and its parents, each one's "Lrc Directory" subfolder, then the
+  same under "Lrc Directory"), but only inside the music folder. It looks
+  straight away rather than waiting up to 3 s for the track's tags. The
+  wipe moves a character at a time rather than a pixel at a time, lines
+  wrap where Android's text layout breaks them, and the list moves a line
+  at a time. The current line is drawn in the text colour and the rest
+  dimmed, rather than with "Inactive Colour". UTF-16 lyrics files are read
+  but not rewritten as UTF-8. Not ported yet: the Timetag Editor (so the
+  Time Offset isn't saved into the file), Playback Control, Show Statusbar,
+  Inactive Colour.
 
 ## Interface
 

@@ -102,6 +102,19 @@ Anything new goes here in the same change that introduces it.
   `/.rockbox/playback.log`. Paths are storage paths ("/Music/…") for library
   files, and full paths for app-local files.
 
+## General settings
+
+- **Power off.** Rockbox's sleep timer and Idle Poweroff turn the player off.
+  SlopBox does what the clean shutdown does to playback: stop (with the stop
+  fade), save the resume point and end the playback service, which removes
+  the notification. The app's screen, if open, stays.
+- **On the charger.** Rockbox checks for USB and the charger. SlopBox asks
+  Android whether the phone is charging (USB charging counts).
+- **Key presses.** For the sleep timer and Idle Poweroff, any player command
+  (screen, notification, headset, lock screen) and any touch on SlopBox's
+  screens counts as a key press. Touches in other apps don't.
+- **Show Shutdown Message** shows a toast ("Shutting down...").
+
 ## Database and tags
 
 - **Database.** The database is SlopBox's own (`ui/db`), not Rockbox's

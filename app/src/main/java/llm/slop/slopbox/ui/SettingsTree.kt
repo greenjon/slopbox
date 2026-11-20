@@ -47,6 +47,11 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var saveMode by remember { mutableIntStateOf(SettingsStore.SAVE_ALL) }
+    // Ticks once a second so live labels (the sleep timer) stay current.
+    var clock by remember { mutableIntStateOf(0) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) { kotlinx.coroutines.delay(1000); clock++ }
+    }
 
     DisposableEffect(store) {
         val l: () -> Unit = { revision++ }
@@ -109,6 +114,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                     toast(item.text)
                 }
             "dirs_to_scan" -> pickRoot()
+            "toggle_sleeptimer" -> llm.slop.slopbox.PowerMgmt.toggleSleepTimer()
             else -> message = "${item.text}: not available in SlopBox yet."
         }
     }
@@ -127,7 +133,12 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
             message = "${item.text}: this kind of setting isn't editable in SlopBox yet."
             return
         }
-        stack += Page.Value(item.text, s.labels, { store.int(s) }, { store.set(s, it) }, note)
+        stack += Page.Value(item.text, s.labels, { store.int(s) }, { v ->
+            store.set(s, v)
+            // Rockbox sleeptimer_duration_cb(): a running timer restarts with the new length.
+            if (s.cfg == "sleeptimer duration" && llm.slop.slopbox.PowerMgmt.sleepTimerSeconds > 0)
+                llm.slop.slopbox.PowerMgmt.setSleepTimer(v)
+        }, note)
     }
 
     fun eqValuePage(band: Int, field: Int): Page.Value {
@@ -154,7 +165,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                 items(page.item.items) { item ->
                     val setting = cat.settings.getOrNull(item.setting)
                     RockRow(
-                        item.text,
+                        if (item.function == "toggle_sleeptimer") sleepTimerLabel(cat, store, clock) else item.text,
                         icon = if (item.isMenu) G.Config else G.Cursor,
                         dim = item.isSetting && setting != null && !store.isLive(setting),
                     ) {
@@ -227,6 +238,14 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
             cat.str("LANG_SET_BOOL_NO") to { confirm = null }))
     }
     message?.let { Dialog(it, listOf("OK" to { message = null })) }
+}
+
+/** Rockbox string_sleeptimer(): "Start Sleep Timer (0:30)" / "Cancel Sleep Timer (0:12)". */
+private fun sleepTimerLabel(cat: llm.slop.slopbox.RbCatalog, store: SettingsStore, @Suppress("UNUSED_PARAMETER") clock: Int): String {
+    val sec = llm.slop.slopbox.PowerMgmt.sleepTimerSeconds
+    val minutes = if (sec > 0) (sec + 10) / 60 else store.int("sleeptimer duration")
+    val time = if (minutes > 0) "%d:%02d".format(minutes / 60, minutes % 60) else cat.str("LANG_OFF")
+    return "%s (%s)".format(cat.str(if (sec > 0) "LANG_SLEEP_TIMER_CANCEL_CURRENT" else "LANG_SLEEP_TIMER_START_CURRENT"), time)
 }
 
 private sealed interface Page {

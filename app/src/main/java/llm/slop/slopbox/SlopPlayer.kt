@@ -959,6 +959,37 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         savePlaylist()
     }
 
+    // ---- Power management (PowerMgmt) ---------------------------------------------
+
+    val isPlayingNow: Boolean get() = playWhenReady && engineActive
+
+    /** Sleep timer ran out on the charger: pause (Rockbox audio_pause()). */
+    fun sleepPause() {
+        setPlaying(false)
+        invalidateState()
+        savePlaylist()
+    }
+
+    /** Rockbox clean shutdown, for playback: stop (with the stop fade), save resume. */
+    fun powerOff(done: () -> Unit) {
+        if (setting("show shutdown message") != 0) {
+            android.widget.Toast.makeText(context, store.catalog.str("LANG_SHUTTINGDOWN"), android.widget.Toast.LENGTH_SHORT).show()
+        }
+        val fade = setting("volume fade") != 0 && isPlayingNow
+        if (engineActive) Engine.setPaused(true, fade)
+        handler.postDelayed({
+            if (engineActive) trackFinished(entries.getOrNull(index), position, autoSkip = false)
+            heldPositionMs = position
+            savePlaylist()
+            stopEngine()
+            playWhenReady = false
+            playbackState = Player.STATE_IDLE
+            updateHolds()
+            invalidateState()
+            done()
+        }, if (fade) 400L else 0L)
+    }
+
     /** Rockbox manual track change, keeping the output going. False if the engine can't. */
     private fun skipTo(target: Int, pos: Long): Boolean {
         val entry = entries.getOrNull(target) ?: return false

@@ -379,6 +379,8 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "single mode", "party mode", "beep", "folder navigation", "constrain next folder",
             "resume rewind", "play log", "album art", "scan min step", "seek acceleration",
             "autoresume enable", "autoresume next track", "start in screen",
+            "idle poweroff", "sleeptimer duration", "sleeptimer on startup",
+            "keypress restarts sleeptimer", "show shutdown message",
         )
 
         @Volatile private var instance: SettingsStore? = null

@@ -19,6 +19,7 @@ import com.google.common.util.concurrent.ListenableFuture
 @UnstableApi
 class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
+    private var power: PowerMgmt.Target? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -35,6 +36,11 @@ class PlaybackService : MediaSessionService() {
             Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE,
         )
+        power = object : PowerMgmt.Target {
+            override val isPlaying get() = player.isPlayingNow
+            override fun sleepPause() = player.sleepPause()
+            override fun powerOff() = player.powerOff { stopSelf() }
+        }.also { PowerMgmt.attach(this, it) }
         session = MediaSession.Builder(this, player)
             .setSessionActivity(openApp)
             .setCallback(object : MediaSession.Callback {
@@ -50,6 +56,17 @@ class PlaybackService : MediaSessionService() {
                     return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                         .setAvailableSessionCommands(commands)
                         .build()
+                }
+
+                // Every command from a controller (UI, notification, headset) is a
+                // key press for the sleep timer and idle poweroff.
+                override fun onPlayerCommandRequest(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                    playerCommand: Int,
+                ): Int {
+                    PowerMgmt.userActivity()
+                    return super.onPlayerCommandRequest(session, controller, playerCommand)
                 }
 
                 // Rockbox's WPS A-B actions (ACTION_WPS_ABSETA_PREVDIR etc.).
@@ -103,6 +120,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        power?.let { PowerMgmt.detach(it) }
         session?.run {
             player.release()
             release()

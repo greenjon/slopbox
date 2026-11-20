@@ -121,6 +121,12 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
+    /** Screen touches count as key presses for the sleep timer and idle poweroff. */
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) PowerMgmt.userActivity()
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)
@@ -137,6 +143,10 @@ class MainActivity : ComponentActivity() {
                 else -> PlaybackService.CMD_AB_RESET
             }
             controller?.sendCustomCommand(androidx.media3.session.SessionCommand(cmd, Bundle.EMPTY), Bundle.EMPTY)
+            return
+        }
+        if (BuildConfig.DEBUG) intent?.getStringExtra("sleep")?.toIntOrNull()?.let {
+            PowerMgmt.setSleepTimerSecondsForTest(it)
             return
         }
         val debugPaths = if (BuildConfig.DEBUG) intent?.getStringExtra("path") else null

@@ -50,9 +50,9 @@ Anything new goes here in the same change that introduces it.
   changes as you go (live for sound settings), then you confirm or cancel. In
   SlopBox you tap a value, which applies it and goes back.
 - **Not editable yet.** Graphical EQ; custom-type settings other than the EQ
-  bands and Maximum Volume Limit (e.g. touchscreen calibration, Quick Screen
-  items, colours); string and filename settings such as Automatic Resume's
-  custom directories.
+  bands, Maximum Volume Limit, the While Playing Screen items and the
+  Quick Screen items (e.g. touchscreen calibration, colours); string and
+  filename settings such as Automatic Resume's custom directories.
 - **Browse actions.** Themes, fonts, skins and languages aren't available.
   Browse .cfg Files and Browse EQ Presets open Android's file picker. There is
   no bundled EQ preset folder.
@@ -187,7 +187,7 @@ Anything new goes here in the same change that introduces it.
 - **Open With.** Rockbox lists its viewer plugins. SlopBox hands the file to
   another Android app through the system chooser.
 - **Open Plugin.** SlopBox has no plugins, so this item only says so.
-- **Not offered.** PictureFlow, Set as Backdrop, Add to Shortcuts, and
+- **Not offered.** PictureFlow, Set as Backdrop, and
   Set As › Database Directory or Recording Directory. Rockbox's Show in Files
   is offered from the playing screen and the database, as in Rockbox.
 - **Folder menu.** The menu button in the file browser's title bar is
@@ -240,3 +240,19 @@ Anything new goes here in the same change that introduces it.
 
 - **Theme engine.** There is none. SlopBox has a native cabbiev2-style
   interface instead of Rockbox's skins.
+- **Main menu.** It has Rockbox's order, but only the items SlopBox has:
+  no Recording, FM Radio or System menu, and Plugins only once there are
+  plugins.
+- **Quick Screen.** It shows Rockbox's four configurable items and uses
+  Rockbox's touchscreen rule (a tap in the top, left, right or bottom third
+  changes that item; anywhere else leaves), drawn as text rather than with
+  Rockbox's arrows. Volume as an item changes the Volume setting, not
+  Android's media volume.
+- **Setting context menu.** A long press on a setting gives Rockbox's menu.
+  A long press on a submenu just opens it.
+- **Shortcuts.** `shortcuts.txt` is kept in SlopBox's own storage, not
+  `/.rockbox/`. Its format is Rockbox's. "debug" shortcuts and "reboot" only
+  say they aren't available, "shutdown" closes SlopBox as Idle Poweroff does,
+  "talk" time shortcuts do nothing (no voice), and the `icon:` number is kept
+  but SlopBox picks the icon by type. A "browse" shortcut to a file opens its
+  folder with the file selected; a "file" shortcut plays it.

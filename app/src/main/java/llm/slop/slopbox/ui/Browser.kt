@@ -70,6 +70,12 @@ class BrowserState {
         return true
     }
 
+    /** Open the browser at a folder of the music tree. */
+    fun openDir(ctx: Context, tree: Uri, dirId: String): Boolean {
+        if (this.tree != tree) open(ctx, tree)
+        return dirId == path.firstOrNull()?.id || descend(dirId, includeLast = true)
+    }
+
     /** Rockbox reveal() / "Show in Files": open the file's folder with the file selected. */
     fun reveal(ctx: Context, tree: Uri, fileId: String): Boolean {
         if (this.tree != tree) open(ctx, tree)

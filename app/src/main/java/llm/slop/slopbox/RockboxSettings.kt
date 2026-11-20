@@ -44,6 +44,13 @@ class RbSetting(
     val tableValues: List<Int>?,
 ) {
     val isCustom get() = kind == "custom"
+    /**
+     * Rockbox is_setting_quickscreenable(): a titled bool, or an int/choice
+     * setting with its value table, not F_BANFROMQS. (Also what may become a
+     * settings shortcut.)
+     */
+    val quickscreenable get() = flags and 0x80000000L == 0L && labels.isNotEmpty() &&
+        kind in setOf("bool", "choice", "int", "table", "sound")
     /** Kept as text in config.cfg: custom settings and Rockbox's string settings (F_T_CHARPTR/UCHARPTR). */
     val isText get() = isCustom || (flags and RbFlags.F_T_MASK).let { it == 4L || it == 5L }
     fun has(flag: Long) = flags and flag != 0L
@@ -239,6 +246,14 @@ class SettingsStore private constructor(private val context: Context, val catalo
         changed()
     }
 
+    /** Rockbox reset_setting(): back to the default. */
+    fun reset(s: RbSetting) {
+        if (s.isText) setText(s, s.defaultText ?: "") else set(s, s.defaultInt)
+    }
+
+    /** Rockbox cfg_to_string(): the value as .cfg text. */
+    fun cfgText(s: RbSetting): String = if (s.isText) text(s) else s.toCfg(int(s))
+
     fun eqBand(band: Int): EqBand {
         val s = catalog.byCfg["eq filter $band"] ?: return DEFAULT_BANDS[band]
         return EqBand.parse(text(s)) ?: DEFAULT_BANDS[band]
@@ -394,6 +409,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "show shuffled adding options", "show queue options",
             "context_wps", "Semitone pitch change", "Timestretch mode",
             "start directory", "playlist catalog directory", "gather runtime data",
+            "qs top", "qs left", "qs right", "qs bottom", "shortcuts instead of quickscreen",
         )
 
         @Volatile private var instance: SettingsStore? = null

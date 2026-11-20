@@ -65,6 +65,9 @@ object PowerMgmt {
         get() = if (sleepEndMs == 0L) 0
         else ((sleepEndMs - SystemClock.elapsedRealtime()) / 1000).toInt().coerceAtLeast(0)
 
+    /** Rockbox sys_poweroff() from a "shutdown" shortcut. */
+    fun powerOffNow() { target?.powerOff() }
+
     /** Rockbox toggle_sleeptimer(): cancel a running timer, else start the default one. */
     fun toggleSleepTimer() {
         setSleepTimer(if (sleepTimerSeconds > 0) 0 else setting("sleeptimer duration"))

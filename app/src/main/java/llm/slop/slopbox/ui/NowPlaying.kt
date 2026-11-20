@@ -359,6 +359,7 @@ private fun ColumnScope.Line(text: String, scroll: Boolean = false, big: Boolean
 /** cabbiev2's popup: Browse, Quick Screen, Context Menu. */
 @Composable
 private fun PopupMenu(nav: Nav) {
+    val ctx = LocalContext.current
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Row(
             Modifier
@@ -374,7 +375,11 @@ private fun PopupMenu(nav: Nav) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PopupButton(G.Folder, null, Modifier.weight(1.2f)) { nav.toBrowser() }
-            PopupButton(G.ListQ, "Q", Modifier.weight(1f)) { nav.push(Screen.QuickScreen) }
+            // Rockbox "Use Shortcuts Menu Instead of Quick Screen".
+            PopupButton(G.ListQ, "Q", Modifier.weight(1f)) {
+                nav.push(if (llm.slop.slopbox.SettingsStore.get(ctx).int("shortcuts instead of quickscreen") != 0)
+                    Screen.Shortcuts else Screen.QuickScreen)
+            }
             // Long press: the WPS hotkey (General Settings › While Playing Screen › WPS Hotkey).
             PopupButton(G.ListC, "C", Modifier.weight(1f), onLongClick = {
                 WpsHotkey.pending = true

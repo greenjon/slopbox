@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.media3.common.MediaItem
 import androidx.media3.session.MediaController
 
-enum class Screen { MainMenu, Browser, Database, NowPlaying, Playlist, QuickScreen, ContextMenu, TrackInfo, Sound, Settings, Bookmarks, BookmarkList, Playlists, CurrentPlaylist, AddToPlaylist, SettingsAt, AlbumArt, Cuesheet, Pitch }
+enum class Screen { MainMenu, Browser, Database, NowPlaying, Playlist, QuickScreen, ContextMenu, TrackInfo, Sound, Settings, Bookmarks, BookmarkList, Playlists, CurrentPlaylist, AddToPlaylist, SettingsAt, AlbumArt, Cuesheet, Pitch, Shortcuts }
 
 /** Screen stack. Rockbox's main menu is always at the bottom. */
 class Nav {
@@ -96,6 +96,7 @@ fun SlopApp(
                 Screen.AlbumArt -> AlbumArtScreen(controller, nav)
                 Screen.Cuesheet -> CuesheetScreen(controller, nav)
                 Screen.Pitch -> PitchScreen(nav)
+                Screen.Shortcuts -> ShortcutsScreen(controller, nav, browser)
             }
         }
     }

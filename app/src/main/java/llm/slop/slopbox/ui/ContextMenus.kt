@@ -622,6 +622,15 @@ fun TreeContextMenu(
                     nav.push(Screen.TrackInfo)
                 }
             } else item { RockRow(str(ctx, "LANG_PROPERTIES"), icon = G.Cursor) { page = "properties" } }
+            // onplay_add_to_shortcuts(): a "browse" shortcut to this file or folder.
+            item {
+                RockRow(str(ctx, "LANG_ADD_TO_FAVES"), icon = G.Cursor) {
+                    llm.slop.slopbox.Shortcuts(ctx).add(llm.slop.slopbox.Shortcuts.Shortcut(
+                        llm.slop.slopbox.Shortcuts.Type.BROWSER,
+                        data = PlaylistFiles.pathOf(doc.id) + if (doc.isDir) "/" else ""))
+                    onClose(false)
+                }
+            }
             if (doc.isDir) item { RockRow(str(ctx, "LANG_SET_AS"), icon = G.Config) { page = "setas" } }
             item { RockRow(str(ctx, "LANG_FILE"), icon = G.Config) { onClose(false); SettingsView.open(nav, "File View") } }
             if (catalog) item {

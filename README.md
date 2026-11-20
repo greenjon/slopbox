@@ -69,7 +69,11 @@ and its arithmetic is checked against Rockbox's C in the unit tests. With
 Gather Runtime Data on, the database keeps Rockbox's play counts, ratings,
 play time, last played and autoscore, which fill the Playback History and
 User Rating menus of Rockbox's `tagnavi.config`; Export and Import
-Modifications use Rockbox's `database_changelog.txt` format.
+Modifications use Rockbox's `database_changelog.txt` format. The Shortcuts
+menu reads and writes Rockbox's `shortcuts.txt` format (browse, file,
+playlist menu, setting, apply, time, separator), fed by "Add to Shortcuts" in
+the file browser and a setting's long-press menu, which also sets the four
+Quick Screen items.
 
 ## Layout
 

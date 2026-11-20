@@ -52,6 +52,9 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
         if (path == null) mutableStateListOf<Page>(Page.Menu(root))
         else mutableStateListOf<Page>(Page.Menu(path.last()))
     }
+    // A "setting" shortcut opens just that setting (Rockbox do_setting_screen()).
+    val single = remember { ShortcutView.setting.also { ShortcutView.setting = null } }
+    var settingMenu by remember { mutableStateOf<RbMenuItem?>(null) }
     var revision by remember { mutableIntStateOf(0) }
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -67,9 +70,13 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
         store.addListener(l)
         onDispose { store.removeListener(l) }
     }
-    fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else nav.pop() }
-    BackHandler(enabled = stack.size > 1 || confirm != null || message != null) {
+    fun back() {
+        if (single != null && stack.size <= 2) nav.pop()
+        else if (stack.size > 1) stack.removeAt(stack.lastIndex) else nav.pop()
+    }
+    BackHandler(enabled = stack.size > 1 || confirm != null || message != null || settingMenu != null) {
         when {
+            settingMenu != null -> settingMenu = null
             confirm != null -> confirm = null
             message != null -> message = null
             else -> back()
@@ -208,6 +215,43 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
         }
     }
 
+    if (single != null) androidx.compose.runtime.LaunchedEffect(Unit) {
+        cat.byCfg[single]?.let { st -> openSetting(RbMenuItem(RbMenuItem.MT_SETTING, st.title, st.index, null, null, emptyList())) }
+            ?: nav.pop()
+    }
+
+    // Rockbox do_menu() ACTION_STD_CONTEXT on a setting: Reset Setting, the
+    // four Quickscreen positions, Add Current to Shortcuts, Add to Shortcuts
+    // (only Reset Setting for settings that can't go on the quickscreen).
+    settingMenu?.let { item ->
+        val st = cat.settings.getOrNull(item.setting)
+        if (st == null) { settingMenu = null; return }
+        Column(Modifier.fillMaxSize()) {
+            TitleBar(cat.str("LANG_ONPLAY_MENU_TITLE"), onBack = { settingMenu = null })
+            RockRow(cat.str("LANG_RESET_SETTING"), icon = G.Cursor) { store.reset(st); settingMenu = null }
+            if (st.quickscreenable) {
+                for ((lang, cfg) in listOf("LANG_TOP_QS_ITEM" to "qs top", "LANG_LEFT_QS_ITEM" to "qs left",
+                    "LANG_BOTTOM_QS_ITEM" to "qs bottom", "LANG_RIGHT_QS_ITEM" to "qs right")) {
+                    RockRow(cat.str(lang), icon = G.Cursor) {
+                        cat.byCfg[cfg]?.let { store.setText(it, st.cfg ?: "-") }
+                        settingMenu = null
+                    }
+                }
+                RockRow(cat.str("LANG_ADD_CURRENT_TO_FAVES"), icon = G.Cursor) {
+                    llm.slop.slopbox.Shortcuts(ctx).add(llm.slop.slopbox.Shortcuts.Shortcut(
+                        llm.slop.slopbox.Shortcuts.Type.SETTING_APPLY, data = st.cfg ?: "", value = store.cfgText(st)))
+                    settingMenu = null
+                }
+                RockRow(cat.str("LANG_ADD_TO_FAVES"), icon = G.Cursor) {
+                    llm.slop.slopbox.Shortcuts(ctx).add(llm.slop.slopbox.Shortcuts.Shortcut(
+                        llm.slop.slopbox.Shortcuts.Type.SETTING, data = st.cfg ?: ""))
+                    settingMenu = null
+                }
+            }
+        }
+        return
+    }
+
     val page = stack.last()
     Column(Modifier.fillMaxSize()) {
         TitleBar(if (page is Page.ContextItem) cat.str("LANG_ONPLAY_MENU_TITLE") else page.title, onBack = ::back)
@@ -224,6 +268,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                         },
                         icon = if (item.isMenu) G.Config else G.Cursor,
                         dim = item.isSetting && setting != null && !store.isLive(setting),
+                        onLongClick = if (item.isSetting && setting != null) ({ settingMenu = item }) else null,
                     ) {
                         when {
                             item.isMenu -> stack += Page.Menu(item)

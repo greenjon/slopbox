@@ -27,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -108,72 +110,83 @@ private fun name(item: MediaItem?): String =
 // ---- Quick Screen ----------------------------------------------------------
 
 /** Rockbox's default Quick Screen: shuffle on the left, repeat on the right; tap to change. */
+/**
+ * Rockbox's quick screen (apps/gui/quickscreen.c): the settings chosen as
+ * "qs top", "qs left", "qs right" and "qs bottom" (default: Shuffle left,
+ * Repeat right). With its touchscreen rule: a tap in the top, left, right or
+ * bottom third changes that item (top and right to the next value, left and
+ * bottom to the previous); a tap anywhere else leaves.
+ */
 @Composable
-fun QuickScreen(controller: MediaController?, nav: Nav) {
-    var tick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) { while (true) { delay(300); tick++ } }
-    val c = controller
-    tick // re-read controller state as it changes
-    val canShuffle = c?.isCommandAvailable(Player.COMMAND_SET_SHUFFLE_MODE) == true
-    val canRepeat = c?.isCommandAvailable(Player.COMMAND_SET_REPEAT_MODE) == true
+fun QuickScreen(@Suppress("UNUSED_PARAMETER") controller: MediaController?, nav: Nav) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val store = remember { llm.slop.slopbox.SettingsStore.get(ctx) }
+    var rev by remember { mutableIntStateOf(0) }
+    androidx.compose.runtime.DisposableEffect(store) {
+        val l: () -> Unit = { rev++ }
+        store.addListener(l)
+        onDispose { store.removeListener(l) }
+    }
+    fun item(cfg: String, default: String): llm.slop.slopbox.RbSetting? {
+        val qs = store.catalog.byCfg[cfg] ?: return null
+        val name = store.text(qs).trim().ifEmpty { default }
+        if (name == "-") return null
+        return store.catalog.byCfg[name]?.takeIf { it.quickscreenable }
+    }
+    @Suppress("UNUSED_EXPRESSION") rev
+    val top = item("qs top", "-")
+    val left = item("qs left", "shuffle")
+    val right = item("qs right", "repeat")
+    val bottom = item("qs bottom", "-")
+
+    // Rockbox option_select_next_val(): step through the values, wrapping
+    // unless the setting says F_NO_WRAP.
+    fun step(st: llm.slop.slopbox.RbSetting?, previous: Boolean) {
+        st ?: return
+        val labels = st.labels
+        val i = labels.indexOfFirst { it.first == store.int(st) }.coerceAtLeast(0)
+        val noWrap = st.flags and 0x1000L != 0L
+        val j = if (previous) (if (i == 0) (if (noWrap) 0 else labels.lastIndex) else i - 1)
+            else (if (i == labels.lastIndex) (if (noWrap) i else 0) else i + 1)
+        store.set(st, labels[j].first)
+    }
+
     Column(Modifier.fillMaxSize()) {
         TitleBar("Quick Screen", onBack = { nav.pop() })
-        Row(
-            Modifier.fillMaxWidth().weight(1f).padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            QsItem(
-                "Shuffle",
-                if (!canShuffle) "not yet" else if (c!!.shuffleModeEnabled) "On" else "Off",
-                G.Shuffle,
-                lit = canShuffle && c!!.shuffleModeEnabled,
-                enabled = canShuffle,
-                modifier = Modifier.weight(1f),
-            ) { c?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled; tick++ } }
-            val mode = c?.repeatMode ?: Player.REPEAT_MODE_OFF
-            QsItem(
-                "Repeat",
-                if (!canRepeat) "not yet" else when (mode) {
-                    Player.REPEAT_MODE_ALL -> "All"
-                    Player.REPEAT_MODE_ONE -> "One"
-                    else -> "Off"
-                },
-                when (mode) {
-                    Player.REPEAT_MODE_ALL -> G.RepeatAll
-                    Player.REPEAT_MODE_ONE -> G.RepeatOne
-                    else -> G.RepeatOff
-                },
-                lit = canRepeat,
-                enabled = canRepeat,
-                modifier = Modifier.weight(1f),
-            ) {
-                c?.let {
-                    it.repeatMode = when (it.repeatMode) {
-                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                        else -> Player.REPEAT_MODE_OFF
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()
+            .pointerInput(top, left, right, bottom) {
+                detectTapGestures { o ->
+                    val w = size.width; val h = size.height
+                    val col = when { o.x < w / 3f -> 0; o.x > 2 * w / 3f -> 2; else -> 1 }
+                    val row = when { o.y < h / 3f -> 0; o.y > 2 * h / 3f -> 2; else -> 1 }
+                    when {
+                        row == 0 && col == 1 -> step(top, false)
+                        row == 2 && col == 1 -> step(bottom, true)
+                        row == 1 && col == 0 -> step(left, true)
+                        row == 1 && col == 2 -> step(right, false)
+                        else -> nav.pop()
                     }
-                    tick++
                 }
+            }) {
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { QsItem(top, top?.let { it.label(store.int(it)).trim() }) }
+                Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { QsItem(left, left?.let { it.label(store.int(it)).trim() }) }
+                    Box(Modifier.weight(1f))
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { QsItem(right, right?.let { it.label(store.int(it)).trim() }) }
+                }
+                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { QsItem(bottom, bottom?.let { it.label(store.int(it)).trim() }) }
             }
         }
     }
 }
 
+/** One quick screen item: the setting's name and its value. */
 @Composable
-private fun QsItem(label: String, value: String, g: G, lit: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Column(
-        modifier
-            .height(180.dp)
-            .background(Cabbie.track, androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceEvenly,
-    ) {
-        BasicText(label, style = Cabbie.body)
-        Glyph(g, Modifier.size(56.dp), lit = lit)
-        BasicText(value, style = Cabbie.body.copy(color = if (enabled) Cabbie.SelTop else Cabbie.Dim))
+private fun QsItem(st: llm.slop.slopbox.RbSetting?, value: String?) {
+    st ?: return
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        BasicText(st.title, style = Cabbie.body.copy(textAlign = TextAlign.Center))
+        BasicText(value ?: "", style = Cabbie.body.copy(color = Cabbie.SelTop, textAlign = TextAlign.Center))
     }
 }

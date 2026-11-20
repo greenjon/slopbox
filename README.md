@@ -75,7 +75,8 @@ playlist menu, setting, apply, time, separator), fed by "Add to Shortcuts" in
 the file browser and a setting's long-press menu, which also sets the four
 Quick Screen items. Plugins are ported one at a time in Kotlin: so far
 `random_folder_advance_config` (with Rockbox's `folder_advance_list.dat`)
-and `lrcplayer` (.lrc/.lrc8/.snc/.txt and ID3 SYLT/USLT lyrics, word wipe).
+`lrcplayer` (.lrc/.lrc8/.snc/.txt and ID3 SYLT/USLT lyrics, word wipe) and
+`lastfm_scrobbler` (playback log to an Audioscrobbler `.scrobbler.log`).
 
 ## Layout
 

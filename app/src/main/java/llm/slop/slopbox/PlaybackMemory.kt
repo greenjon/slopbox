@@ -129,7 +129,10 @@ class PlaybackMemory(private val context: Context) {
     fun log(path: String, elapsedMs: Long, lengthMs: Long) {
         if (elapsedMs <= LOG_MIN_ELAPSED_MS) return
         try {
-            logFile.appendText("${System.currentTimeMillis() / 1000}:$elapsedMs:$lengthMs:$path\n")
+            // Rockbox: mktime(get_time()), the clock's local time as if it were UTC.
+            val now = System.currentTimeMillis()
+            val local = (now + java.util.TimeZone.getDefault().getOffset(now)) / 1000
+            logFile.appendText("$local:$elapsedMs:$lengthMs:$path\n")
         } catch (e: Exception) {
             Log.w(TAG, "playback log", e)
         }

@@ -259,6 +259,11 @@ Anything new goes here in the same change that introduces it.
   but not rewritten as UTF-8. Not ported yet: the Timetag Editor (so the
   Time Offset isn't saved into the file), Playback Control, Show Statusbar,
   Inactive Colour.
+- **Last.fm Logger.** `.scrobbler.log` goes at the top of the music folder
+  (Rockbox: the top of the player's disk), and the playback logs it reads
+  are SlopBox's own. Its `#CLIENT` line names SlopBox and its version. View
+  log shows the playback log as a plain list rather than through the
+  separate lastfm_scrobbler_viewer plugin.
 
 ## Interface
 

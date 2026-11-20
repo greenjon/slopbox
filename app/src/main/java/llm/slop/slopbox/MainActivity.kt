@@ -48,7 +48,9 @@ class MainActivity : ComponentActivity() {
     private val pickRoot = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
         if (tree == null) return@registerForActivityResult
         runCatching {
-            contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Write access too: the Playlist Catalog and saved playlists live in the music folder.
+            contentResolver.takePersistableUriPermission(tree,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         }
         val changed = MusicTree.root(this) != tree
         MusicTree.setRoot(this, tree)

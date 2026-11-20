@@ -107,13 +107,15 @@ fun DatabaseScreen(controller: MediaController?, nav: Nav, state: DatabaseState)
         }
     }
 
-    // Full-screen menus, as in Rockbox.
+    // Full-screen menus, as in Rockbox: the "Playing Next..." menu.
     menu?.let { (title, tracks) ->
-        Column(Modifier.fillMaxSize()) {
-            TitleBar(title, onBack = { menu = null })
-            RockRow("Play", icon = G.Cursor) { menu = null; act(DbAction.Play, tracks) }
-            RockRow("Insert next", icon = G.TangoNote) { menu = null; act(DbAction.InsertNext, tracks) }
-            RockRow("Insert last", icon = G.TangoNote) { menu = null; act(DbAction.InsertLast, tracks) }
+        PlayingNextMenu(title, folderLike = tracks.size > 1, recursable = false, onBack = { menu = null }) { choice, _ ->
+            menu = null
+            val items = tracks.mapNotNull { it.toItem(ctx) }
+            val p = llm.slop.slopbox.SlopPlayer.current
+            if (p != null) p.addToPlaylist(items, choice.position, choice.queue, choice.replace)
+            else controller?.let { Queue.play(it, items, 0) }
+            if (choice.replace) nav.toNowPlaying()
         }
         return
     }

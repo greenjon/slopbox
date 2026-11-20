@@ -137,6 +137,37 @@ Anything new goes here in the same change that introduces it.
 - **"Ask" prompts.** They appear only when SlopBox's screen is connected to
   the player. Stopping from the notification or a headset doesn't ask.
 
+## Playlists
+
+- **Play Last after a mid-playlist start.** When a playlist was started
+  partway through, Rockbox rotates it and "Play Last" inserts at
+  `first_index`, which is the end of the rotated playlist. SlopBox doesn't
+  rotate, so "Play Last" always appends to the end of the list.
+- **Catalog folder.** The Playlist Catalog is `Playlists/` inside the chosen
+  music folder, not `/Playlists` at the root of the storage. Android only
+  grants SlopBox the folder you picked. Absolute paths in playlist files are
+  still storage paths (`/Music/...`), as in Rockbox.
+- **Write access.** Saving or adding to a playlist needs write permission for
+  the music folder. A folder picked before playlists existed was granted
+  read-only, so you have to pick it again (General Settings › Database ›
+  Select directories to scan).
+- **Saving with queued tracks.** Rockbox asks "Remove Queued Tracks?". SlopBox
+  doesn't ask: it saves without the queued tracks and leaves them in the
+  current playlist, which is what Rockbox does when you answer No.
+- **Not implemented yet.** Create Playlist (from a folder) in the catalog
+  menu, Search in Playlist, Reset Playlist Directory, and the playlist
+  viewer's per-track context menu. The viewer offers Remove and Move instead.
+  Move is "tap a track, then tap where it goes" rather than Rockbox's
+  move-cursor mode.
+- **Playlist names.** You type a name in a text field rather than Rockbox's
+  on-screen keyboard. The suggested name is the playlist file's name, the
+  folder's name or "PlaylistN", following Rockbox's rules.
+- **Playing time.** Durations come from each track's tags (read by Rockbox's
+  metadata parser). Rockbox uses the lengths it already has in its playlist
+  buffer.
+- **Queued tracks in the viewer.** They aren't drawn with Rockbox's separate
+  queued icon.
+
 ## Database and tags
 
 - **Database.** The database is SlopBox's own (`ui/db`), not Rockbox's

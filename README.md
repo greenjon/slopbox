@@ -54,7 +54,12 @@ Single Mode, Party Mode, A-B repeat (as session commands; the playing screen
 has no buttons yet), Track Skip Beep, Auto-Change Directory, Logging, Album
 Art, FF/RW acceleration, playlist resume with Rewind Before Resume and Start
 Screen, Automatic Resume, cuesheets (embedded, chapters and .cue files),
-bookmarks, the sleep timer and Idle Poweroff.
+bookmarks, the sleep timer and Idle Poweroff. Playlists work like Rockbox's
+`playlist.c` and `playlist_catalog.c`: the Playing Next menu (Play Next, Add,
+Play Last, the shuffled and queue variants, per the Current Playlist
+settings), queued tracks that drop out once played, `.m3u`/`.m3u8` files
+(relative paths and Windows-style paths included), the Playlist Catalog in
+`Playlists/`, Save Current Playlist, Add to Playlist, and the playlist viewer.
 
 ## Layout
 

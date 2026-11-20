@@ -23,7 +23,7 @@ object FolderWalk {
         val folders = mutableListOf<Pair<Doc, List<Doc>>>()
         suspend fun walk(dir: Doc) {
             val children = MusicTree.list(ctx, tree, dir.id)
-            folders += dir to children.filter { !it.isDir }
+            folders += dir to children.filter { it.isTrack }
             for (c in children) if (c.isDir) walk(c)
         }
         walk(Doc(MusicTree.rootId(tree), "/", true))

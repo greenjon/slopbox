@@ -54,6 +54,7 @@ class BrowserState {
 
 private sealed interface BrowserMenu {
     data class ForItem(val doc: Doc) : BrowserMenu
+    data class PlayingNext(val doc: Doc) : BrowserMenu
     data object ForFolder : BrowserMenu
 }
 
@@ -80,27 +81,75 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
     BackHandler(enabled = menu == null && state.path.size > 1) { state.path.removeAt(state.path.lastIndex) }
     BackHandler(enabled = menu != null) { menu = null }
 
+    // Rockbox ft_play(): playing a file plays its folder from there, after
+    // warn_on_pl_erase() if that would replace a changed playlist.
+    var confirmPlay by remember { mutableStateOf<(() -> Unit)?>(null) }
+    BackHandler(enabled = confirmPlay != null) { confirmPlay = null }
+    confirmPlay?.let { action ->
+        val store = remember { llm.slop.slopbox.SettingsStore.get(ctx) }
+        Column(Modifier.fillMaxSize()) {
+            TitleBar(store.catalog.str("LANG_WARN_ERASEDYNPLAYLIST_PROMPT"), onBack = { confirmPlay = null })
+            RockRow(store.catalog.str("LANG_SET_BOOL_YES"), selected = true) { confirmPlay = null; action() }
+            RockRow(store.catalog.str("LANG_SET_BOOL_NO")) { confirmPlay = null }
+        }
+        return
+    }
+
     // Context menus take over the screen, as in Rockbox.
     menu?.let { m ->
-        BrowserMenuScreen(
-            m, dir,
-            onClose = { menu = null },
-            onChangeRoot = { menu = null; pickRoot() },
-            onAction = { action, doc ->
-                menu = null
-                val c = controller ?: return@BrowserMenuScreen
-                scope.launch {
-                    val items = if (doc.isDir) {
-                        MusicTree.walk(ctx, tree, doc).map { (f, d) -> MusicTree.item(tree, f, d) }
-                    } else listOf(MusicTree.item(tree, doc, dir))
-                    when (action) {
-                        Action.Play -> { Queue.play(c, items, 0); nav.toNowPlaying() }
-                        Action.InsertNext -> Queue.insertNext(c, items)
-                        Action.InsertLast -> Queue.insertLast(c, items)
+        when (m) {
+            is BrowserMenu.ForItem -> {
+                // Rockbox's context menu for a file or folder.
+                val d = m.doc
+                val cat = llm.slop.slopbox.SettingsStore.get(ctx).catalog
+                Column(Modifier.fillMaxSize()) {
+                    TitleBar(if (d.isDir) d.name else d.name.substringBeforeLast('.'), onBack = { menu = null })
+                    RockRow(cat.str("LANG_PLAYING_NEXT"), icon = G.Cursor) { menu = BrowserMenu.PlayingNext(d) }
+                    RockRow(cat.str("LANG_ADD_TO_PL"), icon = G.Cursor) {
+                        menu = null
+                        scope.launch {
+                            val items = when {
+                                d.isPlaylist -> llm.slop.slopbox.PlaylistFiles.load(ctx, tree, d.id, d.name)
+                                d.isDir -> MusicTree.walk(ctx, tree, d).map { (f, fd) -> MusicTree.item(tree, f, fd) }
+                                else -> listOf(MusicTree.item(tree, d, dir))
+                            }
+                            PlaylistsView.addPaths = items.mapNotNull { it.requestMetadata.mediaUri }
+                                .map { llm.slop.slopbox.PlaybackMemory.pathOf(it) }
+                            PlaylistsView.addTitle = d.name.substringBeforeLast('.')
+                            nav.push(Screen.AddToPlaylist)
+                        }
                     }
                 }
-            },
-        )
+            }
+            is BrowserMenu.PlayingNext -> {
+                val d = m.doc
+                PlayingNextMenu(
+                    title = if (d.isDir) d.name else d.name.substringBeforeLast('.'),
+                    folderLike = d.isDir || d.isPlaylist, recursable = d.isDir,
+                    onBack = { menu = null },
+                ) { choice, recurse ->
+                    menu = null
+                    scope.launch {
+                        val items = when {
+                            d.isPlaylist -> llm.slop.slopbox.PlaylistFiles.load(ctx, tree, d.id, d.name)
+                            !d.isDir -> listOf(MusicTree.item(tree, d, dir))
+                            recurse -> MusicTree.walk(ctx, tree, d).map { (f, fd) -> MusicTree.item(tree, f, fd) }
+                            else -> MusicTree.list(ctx, tree, d.id).filter { it.isTrack }.map { MusicTree.item(tree, it, d) }
+                        }
+                        val p = llm.slop.slopbox.SlopPlayer.current
+                        if (p != null) p.addToPlaylist(items, choice.position, choice.queue, choice.replace)
+                        else controller?.let { Queue.play(it, items, 0) }
+                        if (choice.replace) nav.toNowPlaying()
+                    }
+                }
+            }
+            BrowserMenu.ForFolder -> BrowserMenuScreen(
+                dir,
+                onClose = { menu = null },
+                onChangeRoot = { menu = null; pickRoot() },
+                onPlayingNext = { menu = BrowserMenu.PlayingNext(dir) },
+            )
+        }
         return
     }
 
@@ -128,7 +177,7 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
                     val sel = state.cursor[dir.id]?.let { it == e.id } ?: (e.id == playingId)
                     RockRow(
                         if (e.isDir) e.name else e.name.substringBeforeLast('.'),
-                        icon = if (e.isDir) G.TangoFolder else G.TangoNote,
+                        icon = if (e.isDir) G.TangoFolder else if (e.isPlaylist) G.ListC else G.TangoNote,
                         selected = sel,
                         onLongClick = {
                             state.cursor[dir.id] = e.id
@@ -141,9 +190,24 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
                         } else {
                             val c = controller ?: return@RockRow
                             // Rockbox: playing a file plays its folder, starting there.
-                            val files = list.filter { !it.isDir }
-                            Queue.play(c, files.map { MusicTree.item(tree, it, dir) }, files.indexOf(e))
-                            nav.toNowPlaying()
+                            val files = list.filter { it.isTrack }
+                            val play = {
+                                if (e.isPlaylist) {
+                                    // Rockbox ft_play() on a playlist file: play it from the top.
+                                    scope.launch {
+                                        val items = llm.slop.slopbox.PlaylistFiles.load(ctx, tree, e.id, e.name)
+                                        if (items.isNotEmpty()) { Queue.play(c, items, 0); nav.toNowPlaying() }
+                                    }
+                                } else {
+                                    Queue.play(c, files.map { MusicTree.item(tree, it, dir) }, files.indexOf(e))
+                                    nav.toNowPlaying()
+                                }
+                                Unit
+                            }
+                            val p = llm.slop.slopbox.SlopPlayer.current
+                            val store = llm.slop.slopbox.SettingsStore.get(ctx)
+                            if (p != null && p.playlistModified && store.int("warn when erasing dynamic playlist") != 0 &&
+                                store.int("party mode") == 0) confirmPlay = play else play()
                         }
                     }
                 }
@@ -152,31 +216,17 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
     }
 }
 
-private enum class Action { Play, InsertNext, InsertLast }
-
 @Composable
 private fun BrowserMenuScreen(
-    m: BrowserMenu,
     dir: Doc,
     onClose: () -> Unit,
     onChangeRoot: () -> Unit,
-    onAction: (Action, Doc) -> Unit,
+    onPlayingNext: () -> Unit,
 ) {
+    val ctx = LocalContext.current
     Column(Modifier.fillMaxSize()) {
-        when (m) {
-            is BrowserMenu.ForItem -> {
-                val d = m.doc
-                TitleBar(if (d.isDir) d.name else d.name.substringBeforeLast('.'), onBack = onClose)
-                RockRow("Play", icon = G.Cursor) { onAction(Action.Play, d) }
-                RockRow("Insert next", icon = G.TangoNote) { onAction(Action.InsertNext, d) }
-                RockRow("Insert last", icon = G.TangoNote) { onAction(Action.InsertLast, d) }
-            }
-            BrowserMenu.ForFolder -> {
-                TitleBar(dir.name, onBack = onClose)
-                RockRow("Play this folder", icon = G.Cursor) { onAction(Action.Play, dir) }
-                RockRow("Insert folder last", icon = G.TangoNote) { onAction(Action.InsertLast, dir) }
-                RockRow("Change music folder", icon = G.TangoFolder, onClick = onChangeRoot)
-            }
-        }
+        TitleBar(dir.name, onBack = onClose)
+        RockRow(llm.slop.slopbox.SettingsStore.get(ctx).catalog.str("LANG_PLAYING_NEXT"), icon = G.Cursor, onClick = onPlayingNext)
+        RockRow("Change music folder", icon = G.TangoFolder, onClick = onChangeRoot)
     }
 }

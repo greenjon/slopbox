@@ -383,6 +383,10 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "keypress restarts sleeptimer", "show shutdown message",
             "autocreate bookmarks", "autoupdate bookmarks", "autoload bookmarks",
             "use most-recent-bookmarks", "cuesheet support",
+            "sort playlists", "playlist viewer icons", "playlist viewer indices",
+            "playlist viewer track display", "recursive directory insert",
+            "warn when erasing dynamic playlist", "keep current track when replacing playlist",
+            "show shuffled adding options", "show queue options",
         )
 
         @Volatile private var instance: SettingsStore? = null

@@ -44,6 +44,11 @@ fun PlaylistScreen(controller: MediaController?, nav: Nav) {
     var version by remember { mutableIntStateOf(0) }
     var current by remember { mutableIntStateOf(controller?.currentMediaItemIndex ?: 0) }
     var menuFor by remember { mutableStateOf<Int?>(null) }
+    // Rockbox playlist viewer Move: pick a track, then where it goes.
+    var moving by remember { mutableStateOf<Int?>(null) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val store = remember { llm.slop.slopbox.SettingsStore.get(ctx) }
+    val showIcons = store.int("playlist viewer icons") != 0
     val items: List<MediaItem> = remember(controller, version) {
         controller?.let { c -> (0 until c.mediaItemCount).map { c.getMediaItemAt(it) } } ?: emptyList()
     }
@@ -63,10 +68,14 @@ fun PlaylistScreen(controller: MediaController?, nav: Nav) {
                 menuFor = null
                 nav.pop()
             }
-            RockRow("Remove", icon = G.TangoNote) {
+            RockRow(store.catalog.str("LANG_REMOVE"), icon = G.TangoNote) {
                 controller?.removeMediaItem(i)
                 menuFor = null
                 version++
+            }
+            RockRow(store.catalog.str("LANG_MOVE"), icon = G.TangoNote) {
+                moving = i
+                menuFor = null
             }
         }
         return
@@ -74,18 +83,26 @@ fun PlaylistScreen(controller: MediaController?, nav: Nav) {
 
     val listState = rememberLazyListState((current - 3).coerceAtLeast(0))
     Column(Modifier.fillMaxSize()) {
-        TitleBar("Playlist (${items.size})", onBack = { nav.pop() })
+        TitleBar(if (moving != null) store.catalog.str("LANG_MOVE") else "Playlist (${items.size})",
+            onBack = { if (moving != null) moving = null else nav.pop() })
         if (items.isEmpty()) ListNote("The playlist is empty.")
         LazyColumn(Modifier.fillMaxSize(), state = listState) {
             itemsIndexed(items) { i, item ->
                 RockRow(
-                    "${i + 1}. ${name(item)}",
-                    icon = if (i == current) G.Cursor else G.TangoNote,
-                    selected = i == current,
+                    trackLabel(ctx, item, i),
+                    icon = if (!showIcons) null else if (i == current) G.Cursor else G.TangoNote,
+                    selected = if (moving != null) i == moving else i == current,
                     onLongClick = { menuFor = i },
                 ) {
-                    controller?.run { seekTo(i, 0); play() }
-                    nav.pop()
+                    val m = moving
+                    if (m != null) {
+                        controller?.moveMediaItem(m, i)
+                        moving = null
+                        version++
+                    } else {
+                        controller?.run { seekTo(i, 0); play() }
+                        nav.pop()
+                    }
                 }
             }
         }
@@ -174,7 +191,17 @@ private fun QsItem(label: String, value: String, g: G, lit: Boolean, enabled: Bo
 fun WpsContextMenu(nav: Nav) {
     Column(Modifier.fillMaxSize()) {
         TitleBar("Context Menu", onBack = { nav.pop() })
-        RockRow("Playlist", icon = G.TangoNote) { nav.pop(); nav.push(Screen.Playlist) }
+        val cat = llm.slop.slopbox.SettingsStore.get(androidx.compose.ui.platform.LocalContext.current).catalog
+        RockRow(cat.str("LANG_CURRENT_PLAYLIST"), icon = G.TangoNote) { nav.pop(); nav.push(Screen.CurrentPlaylist) }
+        RockRow(cat.str("LANG_ADD_TO_PL"), icon = G.TangoNote) {
+            val p = llm.slop.slopbox.SlopPlayer.current
+            val uri = p?.currentMediaItem?.requestMetadata?.mediaUri
+            if (uri != null) {
+                PlaylistsView.addPaths = listOf(llm.slop.slopbox.PlaybackMemory.pathOf(uri))
+                PlaylistsView.addTitle = p.currentMediaItem?.mediaMetadata?.title?.toString() ?: ""
+                nav.pop(); nav.push(Screen.AddToPlaylist)
+            }
+        }
         RockRow(llm.slop.slopbox.SettingsStore.get(androidx.compose.ui.platform.LocalContext.current).catalog.str("LANG_BOOKMARK_MENU"),
             icon = G.TangoNote) { nav.pop(); nav.push(Screen.Bookmarks) }
         RockRow("Sound Settings", icon = G.TangoNote) { nav.pop(); nav.push(Screen.Sound) }

@@ -32,6 +32,9 @@ fun MainMenu(controller: MediaController?, nav: Nav) {
             "Now Playing", icon = G.Cursor, selected = cursor == 2,
             sub = controller?.mediaMetadata?.title?.toString()?.takeIf { controller.mediaItemCount > 0 },
         ) { cursor = 2; nav.toNowPlaying() }
+        RockRow(llm.slop.slopbox.SettingsStore.get(ctx).catalog.str("LANG_PLAYLISTS"), icon = G.ListC, selected = cursor == 4) {
+            cursor = 4; nav.push(Screen.Playlists)
+        }
         RockRow("Settings", icon = G.Config, selected = cursor == 3) { cursor = 3; nav.push(Screen.Settings) }
     }
 }

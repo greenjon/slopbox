@@ -17,7 +17,12 @@ import llm.slop.slopbox.RockboxTagFile
 import java.io.File
 
 /** One entry in a folder of the music tree. */
-data class Doc(val id: String, val name: String, val isDir: Boolean)
+data class Doc(val id: String, val name: String, val isDir: Boolean) {
+    /** A playlist file (.m3u/.m3u8): listed in the browser, not played as a track. */
+    val isPlaylist: Boolean get() = !isDir && llm.slop.slopbox.PlaylistFiles.isPlaylist(name)
+    /** A track. */
+    val isTrack: Boolean get() = !isDir && !isPlaylist
+}
 
 /**
  * The music folder the user picked (Storage Access Framework tree), browsed
@@ -55,7 +60,7 @@ object MusicTree {
                     if (name.startsWith(".")) continue
                     val mime = c.getString(2) ?: ""
                     val isDir = mime == DocumentsContract.Document.MIME_TYPE_DIR
-                    if (isDir || isAudio(name, mime)) out += Doc(c.getString(0), name, isDir)
+                    if (isDir || isAudio(name, mime) || llm.slop.slopbox.PlaylistFiles.isPlaylist(name)) out += Doc(c.getString(0), name, isDir)
                 }
             }
         } catch (e: Exception) {
@@ -71,7 +76,7 @@ object MusicTree {
         suspend fun go(d: Doc) {
             for (e in list(ctx, tree, d.id)) {
                 if (out.size >= limit) return
-                if (e.isDir) go(e) else out += e to d
+                if (e.isDir) go(e) else if (e.isTrack) out += e to d
             }
         }
         go(dir)

@@ -36,13 +36,17 @@ import kotlinx.coroutines.launch
 @UnstableApi
 class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMainLooper()) {
 
-    private class Entry(val uid: Long, val item: MediaItem) {
+    private class Entry(val uid: Long, var item: MediaItem) {
         var metadata: MediaMetadata? = null
         var durationMs: Long = C.TIME_UNSET
         /** Rockbox tags, read on demand (Single Mode compares them). */
         var tags: Engine.RockboxTags? = null
         var tagsRead = false
         /** Rockbox cuesheet for this file, if Cuesheet Support found one. */
+        /** Rockbox PLAYLIST_QUEUED: played once, then taken out of the playlist. */
+        var queued = false
+        /** Added by an insert (Rockbox PLAYLIST_INSERT_TYPE_INSERT). */
+        var inserted = false
         var cue: Cuesheet? = null
         var cueLoaded = false
         var cueTrack = -1
@@ -117,6 +121,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     }
 
     init {
+        current = this
         store.addListener(settingsListener)
         if (setting("play log") != 0) memory.startLog()
         restorePlaylist()
@@ -256,6 +261,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     /** A playlist made from one folder of the music tree (Rockbox's "dirplay"). */
     private fun folderPlaylist(): Pair<Uri, String>? {
         val first = entries.firstOrNull() ?: return null
+        if (playlistFileOf() != null) return null
         val dir = first.dirId ?: return null
         val tree = first.treeUri?.let(Uri::parse) ?: return null
         return if (entries.all { it.dirId == dir }) tree to dir else null
@@ -550,7 +556,11 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             startCurrent(0, autoSkip = true)
         } else if (n != null) {
             if (current != null && singleModePause(current, entries[n], newPlaylist = false)) playWhenReady = false
+            val next = entries[n]
             index = n
+            dropIfQueued(current)
+            index = entries.indexOfFirst { it === next }.coerceAtLeast(0)
+            movedOn()
             startCurrent(0, autoSkip = true)
         } else if (changeFolder(1, autoSkip = true)) {
             return
@@ -577,7 +587,8 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             val p = Engine.trackSerial
             if (p != playSerial) {
                 // The listener has reached the next file (gapless or crossfade).
-                if (p != manualSerial) serialEntries[playSerial]?.let { old ->
+                val leaving = serialEntries[playSerial]
+                if (p != manualSerial) leaving?.let { old ->
                     trackFinished(old, old.durationMs.takeIf { it != C.TIME_UNSET } ?: 0L, autoSkip = true)
                 }
                 if (abA >= 0 || abB >= 0) resetAb()
@@ -590,6 +601,8 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
                 heldPositionMs = 0
                 seekTarget = -1
                 loadCue(entries.getOrNull(index))
+                dropIfQueued(leaving)
+                movedOn()
                 invalidateState()
                 savePlaylist()
             }
@@ -748,6 +761,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     }
 
     override fun handleRelease(): ListenableFuture<*> {
+        if (current === this) current = null
         savePlaylist()
         if (engineActive) trackFinished(entries.getOrNull(index), position, autoSkip = false)
         folderJob?.cancel()
@@ -778,6 +792,8 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         resetAb()
         stopEngine()
         entries.clear()
+        lastInsertPos = -1
+        playlistModified = false
         mediaItems.forEach { entries += Entry(nextUid++, it) }
         index = if (startIndex == C.INDEX_UNSET) 0 else startIndex.coerceIn(0, maxOf(0, entries.size - 1))
         heldPositionMs = if (startPositionMs == C.TIME_UNSET) 0 else startPositionMs
@@ -802,7 +818,8 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
 
     override fun handleAddMediaItems(index: Int, mediaItems: MutableList<MediaItem>): ListenableFuture<*> {
         val at = index.coerceIn(0, entries.size)
-        val added = mediaItems.map { Entry(nextUid++, it) }
+        playlistModified = true
+        val added = mediaItems.map { Entry(nextUid++, it).also { e -> e.inserted = true } }
         entries.addAll(at, added)
         if (shuffled) original += added else syncOriginal()
         if (entries.size == mediaItems.size) {
@@ -822,6 +839,8 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     }
 
     override fun handleRemoveMediaItems(fromIndex: Int, toIndex: Int): ListenableFuture<*> {
+        playlistModified = true
+        if (lastInsertPos >= fromIndex) lastInsertPos = (lastInsertPos - (toIndex - fromIndex)).coerceAtLeast(-1)
         val removingCurrent = index in fromIndex until toIndex
         val removed = entries.subList(fromIndex, toIndex).toList()
         repeat(toIndex - fromIndex) { entries.removeAt(fromIndex) }
@@ -845,6 +864,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     }
 
     override fun handleMoveMediaItems(fromIndex: Int, toIndex: Int, newIndex: Int): ListenableFuture<*> {
+        playlistModified = true
         val current = entries.getOrNull(index)
         val moved = entries.subList(fromIndex, toIndex).toList()
         repeat(toIndex - fromIndex) { entries.removeAt(fromIndex) }
@@ -975,8 +995,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         val target = if (mediaItemIndex == C.INDEX_UNSET) index else mediaItemIndex.coerceIn(0, entries.size - 1)
         val pos = if (positionMs == C.TIME_UNSET) 0 else positionMs
         if (playbackState == Player.STATE_ENDED) playbackState = Player.STATE_READY
+        val leaving = entries.getOrNull(index)
         if (target != index && engineActive) {
-            trackFinished(entries.getOrNull(index), position, autoSkip = false)
+            trackFinished(leaving, position, autoSkip = false)
             resetAb()
         }
         if (target == index && engineActive) {
@@ -989,6 +1010,12 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             heldPositionMs = pos
             if (playbackState == Player.STATE_READY) startCurrent(pos)
         }
+        if (leaving != null && leaving !== entries.getOrNull(index)) {
+            val now = entries.getOrNull(index)
+            dropIfQueued(leaving)
+            now?.let { t -> entries.indexOfFirst { it === t }.takeIf { it >= 0 }?.let { index = it } }
+        }
+        movedOn()
         updateHolds()
         invalidateState()
         savePlaylist()
@@ -1003,7 +1030,28 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     var askUi: ((kind: String, payload: List<String>, answer: (Int) -> Unit) -> Boolean)? = null
 
     /** The playlist's bookmark name, if it can be bookmarked (a folder playlist). */
-    val bookmarkPlaylist: String? get() = folderPlaylist()?.second?.let { Bookmarks.playlistName(it) }
+    val bookmarkPlaylist: String? get() =
+        playlistFileOf() ?: folderPlaylist()?.second?.let { Bookmarks.playlistName(it) }
+
+    /** The playlist file the whole playlist came from (Rockbox playlist name), if any. */
+    private fun playlistFileOf(): String? {
+        val name = entries.firstOrNull()?.item?.requestMetadata?.extras?.getString(PlaylistFiles.EXTRA_PLAYLIST) ?: return null
+        return if (entries.all { it.item.requestMetadata.extras?.getString(PlaylistFiles.EXTRA_PLAYLIST) == name }) name else null
+    }
+
+    /** Current playlist as track paths, without queued tracks (Rockbox pl_save_playlist()). */
+    fun playlistPaths(): List<String> = entries.filter { !it.queued }.mapNotNull { e -> e.uri?.let { PlaybackMemory.pathOf(it) } }
+
+    /** After Save Current Playlist the playlist has that name (Rockbox playlist->filename). */
+    fun namePlaylist(path: String) {
+        entries.forEach { e ->
+            val ex = (e.item.requestMetadata.extras ?: android.os.Bundle()).apply { putString(PlaylistFiles.EXTRA_PLAYLIST, path) }
+            e.item = e.item.buildUpon().setRequestMetadata(e.item.requestMetadata.buildUpon().setExtras(ex).build()).build()
+        }
+        playlistModified = false
+        invalidateState()
+        savePlaylist()
+    }
 
     private fun fileName(e: Entry): String =
         e.uri?.let { u -> PlaybackMemory.pathOf(u).substringAfterLast('/') } ?: e.item.mediaId
@@ -1058,19 +1106,25 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         folderJob?.cancel()
         holdStart = true
         folderJob = scope.launch {
-            val docs = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                llm.slop.slopbox.ui.MusicTree.list(context, tree, dirId)
-            }.filter { !it.isDir }
-            if (docs.isEmpty()) { holdStart = false; return@launch }
-            val dirDoc = llm.slop.slopbox.ui.Doc(dirId, bm.playlist.trim('/').substringAfterLast('/'), true)
+            // A folder playlist's name ends in "/"; otherwise it's a playlist file.
+            val items: List<MediaItem> = if (bm.playlist.endsWith("/")) {
+                val dirDoc = llm.slop.slopbox.ui.Doc(dirId, bm.playlist.trim('/').substringAfterLast('/'), true)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    llm.slop.slopbox.ui.MusicTree.list(context, tree, dirId)
+                }.filter { it.isTrack }.map { llm.slop.slopbox.ui.MusicTree.item(tree, it, dirDoc) }
+            } else {
+                PlaylistFiles.load(context, tree, dirId, bm.playlist.substringAfterLast('/'))
+            }
+            if (items.isEmpty()) { holdStart = false; return@launch }
+            val names = items.map { it.requestMetadata.mediaUri?.let { u -> PlaybackMemory.pathOf(u).substringAfterLast('/') } }
             if (engineActive) trackFinished(entries.getOrNull(index), position, autoSkip = false)
             stopEngine()
             entries.clear()
-            docs.forEach { entries += Entry(nextUid++, llm.slop.slopbox.ui.MusicTree.item(tree, it, dirDoc)) }
+            items.forEach { entries += Entry(nextUid++, it) }
             shuffled = false
             syncOriginal()
             store.catalog.byCfg["repeat"]?.let { store.set(it, bm.repeat) }
-            index = docs.indexOfFirst { it.name == bm.file }.takeIf { it >= 0 } ?: bm.index.coerceIn(0, entries.size - 1)
+            index = names.indexOf(bm.file).takeIf { it >= 0 } ?: bm.index.coerceIn(0, entries.size - 1)
             if (bm.shuffle) applyShuffle(true, keepCurrentFirst = true)
             store.catalog.byCfg["shuffle"]?.let { store.set(it, if (bm.shuffle) 1 else 0) }
             playbackState = Player.STATE_READY
@@ -1101,6 +1155,126 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         } ?: false
         if (!asked) holdStart = false
         return asked
+    }
+
+    // ---- The current playlist (Rockbox apps/playlist.c, onplay.c) --------------------
+
+    /** Rockbox last_insert_pos: where the next "Add" goes after earlier ones. */
+    private var lastInsertPos = -1
+    private var lastShuffledStart = 0
+    /** Rockbox playlist_modified(): inserted into, removed from or reordered. */
+    var playlistModified = false
+        private set
+    /** Something is playing (or paused) -- Rockbox audio_status(). */
+    val busy: Boolean get() = engineActive
+
+    /**
+     * Rockbox add_to_playlist() / add_track_to_playlist(): [position] is one of
+     * the PLAYLIST_* values, [queue] makes the tracks play once only, and
+     * [replace] starts a new playlist (keeping the current track if "Keep Current
+     * Track When Replacing Playlist" says so and something is playing).
+     */
+    fun addToPlaylist(items: List<MediaItem>, position: Int, queue: Boolean, replace: Boolean) {
+        if (items.isEmpty()) return
+        PowerMgmt.userActivity()
+        var newPlaylist = replace
+        if (replace && setting("keep current track when replacing playlist") != 0 && engineActive) {
+            // playlist_remove_all_tracks(): everything but the current track goes.
+            val current = entries.getOrNull(index)
+            entries.retainAll { it === current }
+            original.retainAll { it === current }
+            index = 0
+            lastInsertPos = -1
+            newPlaylist = false
+        }
+        if (newPlaylist) {
+            if (engineActive) {
+                autobookmark(promptOk = true)
+                trackFinished(entries.getOrNull(index), this.position, autoSkip = false)
+            }
+            folderJob?.cancel()
+            resetAb()
+            stopEngine()
+            entries.clear()
+            original.clear()
+            shuffled = false
+            index = 0
+            lastInsertPos = -1
+        }
+        if (position == PLAYLIST_INSERT_LAST_SHUFFLED) lastShuffledStart = entries.size
+        var pos = position
+        for (item in items) {
+            val e = Entry(nextUid++, item).also { it.queued = queue; it.inserted = !newPlaylist }
+            val at = insertPosition(pos).coerceIn(0, entries.size)
+            entries.add(at, e)
+            original += e
+            if (!newPlaylist && entries.size > 1 && at <= index) index++
+            if (lastInsertPos >= 0 && at < lastInsertPos) lastInsertPos++
+            // Rockbox keeps a directory in order: after the first track "Play Next" adds after it.
+            if (pos == PLAYLIST_INSERT_FIRST) pos = PLAYLIST_INSERT
+        }
+        if (newPlaylist) {
+            playlistModified = false
+            if (setting("shuffle") != 0 && entries.size > 1) applyShuffle(true, keepCurrentFirst = false)
+            index = 0
+            heldPositionMs = 0
+            playbackState = Player.STATE_READY
+            playWhenReady = requestFocus()
+            startCurrent(0)
+        } else {
+            playlistModified = true
+            if (playbackState == Player.STATE_ENDED) playbackState = Player.STATE_READY
+            queueFollowing()
+        }
+        updateHolds()
+        invalidateState()
+        savePlaylist()
+    }
+
+    /** Rockbox add_track_to_playlist_unlocked(): where one track goes. */
+    private fun insertPosition(position: Int): Int {
+        val n = entries.size
+        return when (position) {
+            PLAYLIST_PREPEND -> 0
+            PLAYLIST_INSERT -> {
+                val p = if (lastInsertPos in 0 until n && entries[lastInsertPos].inserted) lastInsertPos + 1
+                    else if (n > 0) index + 1 else 0
+                lastInsertPos = p
+                p
+            }
+            PLAYLIST_INSERT_FIRST -> (if (n > 0) index + 1 else 0).also { lastInsertPos = it }
+            PLAYLIST_INSERT_LAST -> n.also { lastInsertPos = it }
+            PLAYLIST_INSERT_SHUFFLED -> if (n > 0) index + 1 + kotlin.random.Random.nextInt(n - index) else 0
+            PLAYLIST_INSERT_LAST_SHUFFLED -> lastShuffledStart + kotlin.random.Random.nextInt(n - lastShuffledStart + 1)
+            else -> n
+        }
+    }
+
+    /** Rockbox playlist_randomise() from the WPS: Reshuffle. */
+    fun reshuffle() {
+        applyShuffle(true, keepCurrentFirst = true)
+        playlistModified = true
+        queueFollowing()
+        invalidateState()
+        savePlaylist()
+    }
+
+    /** A queued track that has been left is removed (Rockbox playlist_next()). */
+    private fun dropIfQueued(e: Entry?) {
+        e ?: return
+        if (!e.queued || e === entries.getOrNull(index)) return
+        val at = entries.indexOfFirst { it === e }
+        if (at < 0) return
+        entries.removeAt(at)
+        original.removeAll { it === e }
+        if (at < index) index--
+        if (lastInsertPos >= 0 && at <= lastInsertPos) lastInsertPos--
+        queueFollowing()
+    }
+
+    /** Rockbox playlist_next(): passing the last inserted track resets the insert point. */
+    private fun movedOn() {
+        if (lastInsertPos >= 0 && index > lastInsertPos) lastInsertPos = -1
     }
 
     // ---- Cuesheets (Rockbox apps/cuesheet.c) -----------------------------------------
@@ -1209,6 +1383,17 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         /** "single mode" values (settings.h SINGLE_MODE_*). */
         private const val SINGLE_TRACK = 1
         private const val SINGLE_PLAYLIST = 8
+        /** Rockbox playlist.h insert positions. */
+        const val PLAYLIST_PREPEND = -1
+        const val PLAYLIST_INSERT = -2
+        const val PLAYLIST_INSERT_LAST = -3
+        const val PLAYLIST_INSERT_FIRST = -4
+        const val PLAYLIST_INSERT_SHUFFLED = -5
+        const val PLAYLIST_INSERT_LAST_SHUFFLED = -7
+
+        /** The player of the running playback service (same process, main thread). */
+        @Volatile var current: SlopPlayer? = null
+
         const val ASK_CREATE = "create"
         const val ASK_LOAD = "load"
         /** "start in screen": Resume Playback. */

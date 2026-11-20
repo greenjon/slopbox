@@ -132,20 +132,80 @@ fun CatalogScreen(controller: MediaController?, nav: Nav) {
     }
 }
 
-/** Rockbox playlist_viewer_ex() on a playlist file: its tracks; picking one plays from there. */
+/**
+ * Rockbox playlist_viewer_ex() on a playlist file: its tracks; picking one
+ * plays the playlist from there. The track menu edits this playlist (not the
+ * one playing), and leaving after a change asks "Save Changes?".
+ */
 @Composable
 private fun PlaylistFileScreen(controller: MediaController?, nav: Nav, tree: Uri, doc: Doc, onBack: () -> Unit) {
     val ctx = LocalContext.current
     var items by remember { mutableStateOf<List<MediaItem>?>(null) }
+    var modified by remember { mutableStateOf(false) }
+    var menuFor by remember { mutableStateOf<Int?>(null) }
+    var moving by remember { mutableStateOf<Int?>(null) }
+    var askSave by remember { mutableStateOf(false) }
+    var naming by remember { mutableStateOf(false) }
     LaunchedEffect(doc.id) { items = PlaylistFiles.load(ctx, tree, doc.id, doc.name) }
+    fun paths() = items.orEmpty().mapNotNull { it.requestMetadata.mediaUri }.map { PlaybackMemory.pathOf(it) }
+    fun saveTo(name: String): Boolean {
+        val base = doc.name.substringBeforeLast('.')
+        val target = if (name == base) MusicTree.docUri(tree, doc.id) to doc.name
+            else PlaylistFiles.create(ctx, tree, name)?.let { it.first to "$name.m3u8" }
+        return target != null && PlaylistFiles.write(ctx, target.first, target.second, paths())
+    }
+    fun leave() { if (modified) askSave = true else onBack() }
+    BackHandler(enabled = menuFor == null && !naming && !askSave) { if (moving != null) moving = null else leave() }
+    BackHandler(enabled = menuFor != null) { menuFor = null }
+
+    if (askSave) {
+        YesNo(str(ctx, "LANG_SAVE_CHANGES")) { yes ->
+            askSave = false
+            if (yes && !saveTo(doc.name.substringBeforeLast('.'))) toast(ctx, str(ctx, "LANG_SAVE") + " " + str(ctx, "LANG_FAILED"))
+            onBack()
+        }
+        return
+    }
+    if (naming) {
+        // Rockbox save_playlist_screen(): suggests the playlist's own name.
+        NameEntry(str(ctx, "LANG_SAVE_DYNAMIC_PLAYLIST"), doc.name.substringBeforeLast('.')) { n ->
+            naming = false
+            if (n != null) {
+                if (saveTo(n)) modified = false
+                else toast(ctx, str(ctx, "LANG_SAVE") + " " + str(ctx, "LANG_FAILED"))
+            }
+        }
+        return
+    }
+    menuFor?.let { i ->
+        val l = items ?: return
+        val item = l.getOrNull(i) ?: run { menuFor = null; return }
+        ViewerTrackMenu(item, nav,
+            onBack = { menuFor = null },
+            onRemove = { items = l.filterIndexed { j, _ -> j != i }; modified = true; menuFor = null },
+            onMove = { moving = i; menuFor = null },
+            onShuffle = { items = l.shuffled(); modified = true; menuFor = null },
+            onSave = { menuFor = null; naming = true },
+        )
+        return
+    }
     Column(Modifier.fillMaxSize()) {
-        TitleBar(doc.name.substringBeforeLast('.'), onBack = onBack)
+        TitleBar(if (moving != null) str(ctx, "LANG_MOVE") else doc.name.substringBeforeLast('.'),
+            onBack = { if (moving != null) moving = null else leave() })
         val l = items
         if (l == null) ListNote("Loading…") else LazyColumn(Modifier.fillMaxSize()) {
             itemsIndexed(l) { i, item ->
-                RockRow(trackLabel(ctx, item, i), icon = G.TangoNote) {
-                    controller?.let { Queue.play(it, l, i) }
-                    nav.toNowPlaying()
+                RockRow(trackLabel(ctx, item, i), icon = G.TangoNote, selected = i == moving,
+                    onLongClick = { menuFor = i }) {
+                    val m = moving
+                    if (m != null) {
+                        items = l.toMutableList().apply { add(i, removeAt(m)) }
+                        modified = true
+                        moving = null
+                    } else {
+                        controller?.let { Queue.play(it, l, i) }
+                        nav.toNowPlaying()
+                    }
                 }
             }
         }

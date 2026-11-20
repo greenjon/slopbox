@@ -154,9 +154,12 @@ Anything new goes here in the same change that introduces it.
 - **Saving with queued tracks.** Rockbox asks "Remove Queued Tracks?". SlopBox
   doesn't ask: it saves without the queued tracks and leaves them in the
   current playlist, which is what Rockbox does when you answer No.
-- **Playlist viewer.** It has no per-track context menu. It offers Remove
-  and Move instead, and Move is "tap a track, then tap where it goes" rather
-  than Rockbox's move-cursor mode.
+- **Playlist viewer.** A long press opens Rockbox's track menu (Playing
+  Next, Add to Playlist, Remove, Move, Show Track Info, Shuffle, Save,
+  Playlist Viewer Settings) without PictureFlow. Move is "tap a track, then
+  tap where it goes" rather than Rockbox's move-cursor mode. Shuffling a
+  playlist file in the viewer uses Android's random order rather than
+  Rockbox's seeded one.
 - **Catalog folder from Set As.** "Set As... › Playlist Directory" works only
   for a folder inside the music folder.
 - **Create Playlist.** It collects every track in the music folder, not from
@@ -174,9 +177,11 @@ Anything new goes here in the same change that introduces it.
 
 ## Context menus and files
 
-- **WPS hotkey.** The first "context_wps" item is the WPS hotkey, as on
-  Rockbox targets with a hotkey button. SlopBox stores it, but no touch on
-  the playing screen triggers it yet.
+- **WPS hotkey.** The first "context_wps" item is the WPS hotkey. Rockbox's
+  touchscreen keymap fires it with a tap in the bottom-right cell of its 3x3
+  grid, but cabbiev2's touch regions replace that grid and leave it unbound.
+  In SlopBox a long press on the "C" button of the playing screen's pop-up
+  runs it.
 - **Set Song Rating.** You pick 0 to 10 from a list rather than Rockbox's
   number spinner.
 - **Open With.** Rockbox lists its viewer plugins. SlopBox hands the file to

@@ -286,6 +286,23 @@ fun WpsContextMenu(controller: MediaController?, nav: Nav, browser: BrowserState
         return
     }
 
+    // Rockbox gui/wps.c ACTION_WPS_HOTKEY: run context item 0 straight away.
+    LaunchedEffect(Unit) {
+        if (!WpsHotkey.pending) return@LaunchedEffect
+        WpsHotkey.pending = false
+        when (val hk = WpsContext.items(store)[0]) {
+            Hotkey.OFF -> nav.pop()
+            Hotkey.PITCHSCREEN -> { nav.pop(); nav.push(Screen.Pitch) }
+            Hotkey.DELETE, Hotkey.CONTEXT_MENU -> run(hk)
+            else -> {
+                val top = nav.top
+                run(hk)
+                if (nav.top == top && nav.top == Screen.ContextMenu) nav.pop()
+            }
+        }
+    }
+    if (WpsHotkey.pending) return
+
     val cue = SlopPlayer.current?.cuesheet
     Column(Modifier.fillMaxSize()) {
         TitleBar(str(ctx, "LANG_ONPLAY_MENU_TITLE"), onBack = { nav.pop() })
@@ -661,4 +678,80 @@ fun PropertiesScreen(tree: Uri, doc: Doc, onBack: () -> Unit) {
             }
         }
     }
+}
+
+// ---- The playlist viewer's context menu (Rockbox playlist_viewer.c context_menu()) ----
+
+/**
+ * Rockbox's playlist viewer menu for one track: Playing Next..., Add to
+ * Playlist..., Remove, Move, Show Track Info, Shuffle, Save and Playlist
+ * Viewer Settings. Shuffle asks first (yesno_pop_confirm).
+ */
+@Composable
+fun ViewerTrackMenu(
+    item: MediaItem,
+    nav: Nav,
+    onBack: () -> Unit,
+    onRemove: () -> Unit,
+    onMove: () -> Unit,
+    onShuffle: () -> Unit,
+    onSave: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    var page by remember { mutableStateOf("menu") }
+    BackHandler(enabled = page != "menu") { page = "menu" }
+    val path = item.requestMetadata.mediaUri?.let { PlaybackMemory.pathOf(it) } ?: item.mediaId
+    val title = path.substringAfterLast('/').substringBeforeLast('.')
+    when (page) {
+        "next" -> {
+            PlayingNextMenu(title, folderLike = false, recursable = false, onBack = { page = "menu" }) { choice, _ ->
+                SlopPlayer.current?.addToPlaylist(listOf(item), choice.position, choice.queue, choice.replace)
+                onBack()
+                if (choice.replace) nav.toNowPlaying()
+            }
+            return
+        }
+        "shuffle" -> {
+            YesNo(str(ctx, "LANG_SHUFFLE"), listOf(str(ctx, "LANG_ARE_YOU_SURE"))) { yes ->
+                if (yes) onShuffle() else page = "menu"
+            }
+            return
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        TitleBar(str(ctx, "LANG_PLAYLIST"), onBack = onBack)
+        LazyColumn(Modifier.fillMaxSize()) {
+            item { RockRow(str(ctx, "LANG_PLAYING_NEXT"), icon = G.Cursor) { page = "next" } }
+            item {
+                RockRow(str(ctx, "LANG_ADD_TO_PL"), icon = G.Cursor) {
+                    PlaylistsView.addPaths = listOf(path)
+                    PlaylistsView.addTitle = title
+                    onBack()
+                    nav.push(Screen.AddToPlaylist)
+                }
+            }
+            item { RockRow(str(ctx, "LANG_REMOVE"), icon = G.Cursor, onClick = onRemove) }
+            item { RockRow(str(ctx, "LANG_MOVE"), icon = G.Cursor, onClick = onMove) }
+            item {
+                RockRow(str(ctx, "LANG_MENU_SHOW_ID3_INFO"), icon = G.Cursor) {
+                    TrackInfoView.item = item
+                    onBack()
+                    nav.push(Screen.TrackInfo)
+                }
+            }
+            item { RockRow(str(ctx, "LANG_SHUFFLE"), icon = G.Cursor) { page = "shuffle" } }
+            item { RockRow(str(ctx, "LANG_SAVE"), icon = G.Cursor, onClick = onSave) }
+            item {
+                RockRow(str(ctx, "LANG_PLAYLISTVIEWER_SETTINGS"), icon = G.Config) {
+                    onBack()
+                    SettingsView.open(nav, "Playlist Viewer Settings")
+                }
+            }
+        }
+    }
+}
+
+/** The WPS hotkey (context_wps item 0) waiting to run when the context menu screen opens. */
+object WpsHotkey {
+    var pending = false
 }

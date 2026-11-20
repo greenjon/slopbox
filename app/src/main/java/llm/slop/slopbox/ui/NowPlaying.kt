@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -374,14 +375,19 @@ private fun PopupMenu(nav: Nav) {
         ) {
             PopupButton(G.Folder, null, Modifier.weight(1.2f)) { nav.toBrowser() }
             PopupButton(G.ListQ, "Q", Modifier.weight(1f)) { nav.push(Screen.QuickScreen) }
-            PopupButton(G.ListC, "C", Modifier.weight(1f)) { nav.push(Screen.ContextMenu) }
+            // Long press: the WPS hotkey (General Settings › While Playing Screen › WPS Hotkey).
+            PopupButton(G.ListC, "C", Modifier.weight(1f), onLongClick = {
+                WpsHotkey.pending = true
+                nav.push(Screen.ContextMenu)
+            }) { nav.push(Screen.ContextMenu) }
         }
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun PopupButton(g: G, letter: String?, modifier: Modifier, onClick: () -> Unit) {
-    Box(modifier.fillMaxHeight().clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+private fun PopupButton(g: G, letter: String?, modifier: Modifier, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
+    Box(modifier.fillMaxHeight().combinedClickable(onLongClick = onLongClick, onClick = onClick), contentAlignment = Alignment.Center) {
         Box(Modifier.fillMaxHeight(0.85f).aspectRatio(1f)) {
             Glyph(g, Modifier.fillMaxSize())
             if (letter != null) {

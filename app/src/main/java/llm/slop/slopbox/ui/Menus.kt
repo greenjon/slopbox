@@ -59,25 +59,18 @@ fun PlaylistScreen(controller: MediaController?, nav: Nav) {
         }
     }
 
-    BackHandler(enabled = menuFor != null) { menuFor = null }
+    var saving by remember { mutableStateOf(false) }
+    BackHandler(enabled = menuFor != null || saving) { menuFor = null; saving = false }
+    if (saving) { SavePlaylistScreen(onDone = { saving = false }); return }
     menuFor?.let { i ->
-        Column(Modifier.fillMaxSize()) {
-            TitleBar(name(items.getOrNull(i)), onBack = { menuFor = null })
-            RockRow("Play", icon = G.Cursor) {
-                controller?.run { seekTo(i, 0); play() }
-                menuFor = null
-                nav.pop()
-            }
-            RockRow(store.catalog.str("LANG_REMOVE"), icon = G.TangoNote) {
-                controller?.removeMediaItem(i)
-                menuFor = null
-                version++
-            }
-            RockRow(store.catalog.str("LANG_MOVE"), icon = G.TangoNote) {
-                moving = i
-                menuFor = null
-            }
-        }
+        val item = items.getOrNull(i) ?: run { menuFor = null; return }
+        ViewerTrackMenu(item, nav,
+            onBack = { menuFor = null; version++ },
+            onRemove = { controller?.removeMediaItem(i); menuFor = null; version++ },
+            onMove = { moving = i; menuFor = null },
+            onShuffle = { llm.slop.slopbox.SlopPlayer.current?.reshuffle(); menuFor = null; version++ },
+            onSave = { menuFor = null; saving = true },
+        )
         return
     }
 

@@ -1,0 +1,7 @@
+#!/bin/sh
+# Stand-in sdl2-config for host warble builds (see sdlstub/SDL.h).
+case "$1" in
+  --version) echo 2.30.0;;
+  --cflags) echo "-I$(dirname "$(readlink -f "$0")")/sdlstub";;
+  *) echo "";;
+esac

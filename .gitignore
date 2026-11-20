@@ -1,0 +1,13 @@
+.gradle/
+build/
+build-host/
+build-android/
+app/build/
+app/.cxx/
+app/src/main/jniLibs/
+local.properties
+key.properties
+*.jks
+host/sb_cli
+.idea/
+*.iml

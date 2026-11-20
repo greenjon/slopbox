@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app's name lives here, so a fork can rename it in one place. -->
+    <string name="app_name">SlopBox</string>
+</resources>

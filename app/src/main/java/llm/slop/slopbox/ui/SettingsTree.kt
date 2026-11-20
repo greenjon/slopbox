@@ -143,6 +143,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
         when (item.function) {
             "eq_do_simple_menu" -> stack += Page.SimpleEq(item.text)
             "eq_do_advanced_menu" -> stack += Page.AdvancedEq(item.text)
+            "eq_menu_graphical" -> stack += Page.GraphicalEq(item.text)
             "eq_reset_defaults" -> { store.resetEq(); toast(item.text) }
             "reset_settings" -> confirm = cat.str("LANG_ARE_YOU_SURE") to { store.resetAll() }
             "eq_save_preset" -> { saveMode = SettingsStore.SAVE_EQ; saver.launch("eq.cfg") }
@@ -318,6 +319,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                     }
                 }
             }
+            is Page.GraphicalEq -> GraphicalEq(store)
             is Page.SimpleEq -> LazyColumn(Modifier.fillMaxSize()) {
                 @Suppress("UNUSED_EXPRESSION") revision
                 items((0 until SettingsStore.EQ_BANDS).toList()) { band ->
@@ -387,6 +389,7 @@ private sealed interface Page {
     ) : Page
     data class SimpleEq(override val title: String) : Page
     data class ContextItem(val item: Int) : Page { override val title get() = "" }
+    data class GraphicalEq(override val title: String) : Page
     data class AdvancedEq(override val title: String) : Page
 }
 

@@ -49,7 +49,11 @@ Anything new goes here in the same change that introduces it.
 - **Value screens.** In Rockbox you scroll through values and the setting
   changes as you go (live for sound settings), then you confirm or cancel. In
   SlopBox you tap a value, which applies it and goes back.
-- **Not editable yet.** Graphical EQ; custom-type settings other than the EQ
+- **Graphical EQ.** The same screen, ranges and steps as Rockbox's. Touch
+  is direct: tap a band, tap its type, gain, cutoff or Q to edit that, and
+  step with −/+ (−−/++ for big steps), which repeat while held. Rockbox's
+  touchscreen keymap for this screen is a 3x3 grid instead.
+- **Not editable yet.** Custom-type settings other than the EQ
   bands, Maximum Volume Limit, the While Playing Screen items and the
   Quick Screen items (e.g. touchscreen calibration, colours); string and
   filename settings such as Automatic Resume's custom directories.

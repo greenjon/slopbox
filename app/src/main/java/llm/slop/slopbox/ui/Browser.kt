@@ -66,7 +66,7 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
 
     if (tree == null || state.path.isEmpty()) {
         Column(Modifier.fillMaxSize()) {
-            TitleBar("Files", onBack = null) { BarButton(G.Play) { nav.toNowPlaying() } }
+            TitleBar("Files", onBack = { nav.pop() }) { BarButton(G.Play) { nav.toNowPlaying() } }
             ListNote("Pick the folder that holds your music.")
             RockRow("Choose music folder", icon = G.TangoFolder, selected = true, onClick = pickRoot)
         }
@@ -114,7 +114,7 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
     Column(Modifier.fillMaxSize()) {
         TitleBar(
             dir.name,
-            onBack = if (state.path.size > 1) ({ state.path.removeAt(state.path.lastIndex) }) else null,
+            onBack = { if (state.path.size > 1) state.path.removeAt(state.path.lastIndex) else nav.pop() },
         ) {
             BarButton(G.ListC) { menu = BrowserMenu.ForFolder }
             BarButton(G.Play) { nav.toNowPlaying() }

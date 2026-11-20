@@ -106,7 +106,7 @@ object MusicTree {
         "mod", "cmc", "cm3", "cmr", "cms", "dmc", "dlt", "mpt", "mpd", "rmt", "tmc", "tm8", "tm2", "mpu",
     )
 
-    private fun isAudio(name: String, mime: String): Boolean =
+    fun isAudio(name: String, mime: String): Boolean =
         mime.startsWith("audio/") || name.substringAfterLast('.', "").lowercase() in AUDIO_EXT
 }
 

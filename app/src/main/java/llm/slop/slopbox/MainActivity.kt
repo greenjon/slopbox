@@ -21,6 +21,8 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import llm.slop.slopbox.ui.BrowserState
+import llm.slop.slopbox.ui.DatabaseState
+import llm.slop.slopbox.ui.db.TagDb
 import llm.slop.slopbox.ui.MusicTree
 import llm.slop.slopbox.ui.Nav
 import llm.slop.slopbox.ui.Queue
@@ -35,6 +37,7 @@ class MainActivity : ComponentActivity() {
     private var pending: List<Uri>? = null
     private val nav = Nav()
     private val browser = BrowserState()
+    private val database = DatabaseState()
     /** On launch, land on the WPS if something is already playing. */
     private var resumeToWps = false
 
@@ -43,8 +46,11 @@ class MainActivity : ComponentActivity() {
         runCatching {
             contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
+        val changed = MusicTree.root(this) != tree
         MusicTree.setRoot(this, tree)
         browser.open(this, tree)
+        // The old database points into the old folder.
+        if (changed && TagDb.tracks.isNotEmpty()) TagDb.scan(this, tree, full = true)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,12 +60,13 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         browser.open(this, MusicTree.root(this))
+        TagDb.load(this)
         if (savedInstanceState == null) {
             resumeToWps = true
             handleIntent(intent)
         }
         setContent {
-            SlopApp(controller, nav, browser, pickRoot = { pickRoot.launch(null) })
+            SlopApp(controller, nav, browser, database, pickRoot = { pickRoot.launch(null) })
         }
     }
 

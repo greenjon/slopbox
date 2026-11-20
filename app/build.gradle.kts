@@ -63,6 +63,15 @@ android {
     }
 }
 
+// Rockbox's own database menus, shipped as an asset straight from the submodule.
+val rockboxAssets = layout.buildDirectory.dir("generated/rockboxAssets")
+val copyRockboxAssets by tasks.registering(Copy::class) {
+    from(rootProject.file("third_party/rockbox/apps/tagnavi.config"))
+    into(rockboxAssets.map { it.dir("rockbox") })
+}
+android.sourceSets["main"].assets.srcDir(rockboxAssets)
+tasks.named("preBuild") { dependsOn(copyRockboxAssets) }
+
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
@@ -79,4 +88,5 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    testImplementation(libs.junit)
 }

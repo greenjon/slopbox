@@ -21,7 +21,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
  * they scale to any size. [lit] false draws the greyed "off" variant.
  */
 enum class G { Play, Pause, Stop, Next, Prev, Shuffle, RepeatAll, RepeatOne, RepeatOff, Volume,
-    Folder, ListQ, ListC, TangoFolder, TangoNote, Cursor, Back }
+    Folder, ListQ, ListC, TangoFolder, TangoNote, Cursor, Back, Config }
 
 @Composable
 fun Glyph(g: G, modifier: Modifier, lit: Boolean = true, level: Float = 1f) {
@@ -56,6 +56,7 @@ fun Glyph(g: G, modifier: Modifier, lit: Boolean = true, level: Float = 1f) {
                 poly(0.25f to 0.15f, 0.85f to 0.5f, 0.25f to 0.85f),
                 Brush.verticalGradient(listOf(Cabbie.TangoGreenLight, Cabbie.TangoGreen)), Color(0xFF2E6005),
             )
+            G.Config -> wrench()
             G.Back -> drawPath(
                 lines(0.62f to 0.15f, 0.28f to 0.5f, 0.62f to 0.85f),
                 Cabbie.Text,
@@ -206,4 +207,16 @@ private fun DrawScope.note() {
         }
         glossy(head, green, rim)
     }
+}
+
+private fun DrawScope.wrench() {
+    val metal = Brush.linearGradient(listOf(Color(0xFFEEEEEC), Color(0xFF888A85)), pt(0.2f, 0.2f), pt(0.8f, 0.8f))
+    val rim = Color(0xFF555753)
+    drawLine(rim, pt(0.2f, 0.8f), pt(0.62f, 0.38f), size.width * 0.2f, StrokeCap.Round)
+    drawLine(metal, pt(0.2f, 0.8f), pt(0.62f, 0.38f), size.width * 0.14f, StrokeCap.Round)
+    drawCircle(rim, radius = size.width * 0.22f, center = pt(0.68f, 0.32f))
+    drawCircle(metal, radius = size.width * 0.19f, center = pt(0.68f, 0.32f))
+    // The jaw: a notch cut toward the top right.
+    drawPath(poly(0.68f to 0.32f, 0.98f to 0.12f, 0.88f to 0.02f), Color(0xFF2A2A2A))
+    drawCircle(Color(0xFF2A2A2A), radius = size.width * 0.07f, center = pt(0.68f, 0.32f))
 }

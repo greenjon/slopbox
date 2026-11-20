@@ -12,19 +12,36 @@ import androidx.compose.ui.Modifier
 import androidx.media3.common.MediaItem
 import androidx.media3.session.MediaController
 
-enum class Screen { Browser, NowPlaying, Playlist, QuickScreen, ContextMenu, TrackInfo, Sound }
+enum class Screen { MainMenu, Browser, Database, NowPlaying, Playlist, QuickScreen, ContextMenu, TrackInfo, Sound, Settings }
 
-/** Screen stack. The file browser is always at the bottom, like Rockbox's "Files". */
+/** Screen stack. Rockbox's main menu is always at the bottom. */
 class Nav {
-    val stack = mutableStateListOf(Screen.Browser)
+    val stack = mutableStateListOf(Screen.MainMenu)
     val top: Screen get() = stack.last()
 
     fun push(s: Screen) { stack.add(s) }
     fun pop() { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
-    fun toBrowser() { while (stack.size > 1) stack.removeAt(stack.lastIndex) }
+
+    /** Back to the browser playback was started from (Files or Database), else the main menu. */
+    fun toBrowser() {
+        while (stack.size > 1 && top !in BROWSERS) stack.removeAt(stack.lastIndex)
+    }
+
+    fun toFiles() {
+        while (stack.size > 1) stack.removeAt(stack.lastIndex)
+        stack.add(Screen.Browser)
+    }
+
     fun toNowPlaying() {
-        toBrowser()
-        stack.add(Screen.NowPlaying)
+        if (Screen.NowPlaying in stack) {
+            while (top != Screen.NowPlaying) stack.removeAt(stack.lastIndex)
+        } else {
+            stack.add(Screen.NowPlaying)
+        }
+    }
+
+    private companion object {
+        val BROWSERS = setOf(Screen.Browser, Screen.Database, Screen.MainMenu)
     }
 }
 
@@ -49,12 +66,21 @@ object Queue {
 }
 
 @Composable
-fun SlopApp(controller: MediaController?, nav: Nav, browser: BrowserState, pickRoot: () -> Unit) {
+fun SlopApp(
+    controller: MediaController?,
+    nav: Nav,
+    browser: BrowserState,
+    database: DatabaseState,
+    pickRoot: () -> Unit,
+) {
     BackHandler(enabled = nav.stack.size > 1) { nav.pop() }
     Backdrop {
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
             when (nav.top) {
+                Screen.MainMenu -> MainMenu(controller, nav)
                 Screen.Browser -> BrowserScreen(controller, nav, browser, pickRoot)
+                Screen.Database -> DatabaseScreen(controller, nav, database)
+                Screen.Settings -> SettingsMenu(nav, pickRoot)
                 Screen.NowPlaying -> NowPlayingScreen(controller, nav)
                 Screen.Playlist -> PlaylistScreen(controller, nav)
                 Screen.QuickScreen -> QuickScreen(controller, nav)

@@ -97,6 +97,12 @@ private data class Snap(
     val canRepeat: Boolean = false,
     val codecLine: String = "",
     val volume: Float = 0f,
+    /** Rockbox's repeat setting: 0 off, 1 all, 2 one, 3 shuffle, 4 A-B. */
+    val rbRepeat: Int = 0,
+    val abA: Long = -1,
+    val abB: Long = -1,
+    /** Cuesheet track starts after the first (cue_draw_markers()). */
+    val cueMarks: List<Long> = emptyList(),
 )
 
 private fun snap(c: MediaController, ctx: Context): Snap {
@@ -125,6 +131,10 @@ private fun snap(c: MediaController, ctx: Context): Snap {
         // %?fv<(vbr) |>%fb kbit/s %fc
         codecLine = if (info.codec.isNotEmpty()) "${info.bitrate} kbit/s ${info.codec}" else "",
         volume = am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max,
+        rbRepeat = llm.slop.slopbox.SettingsStore.get(ctx).int("repeat"),
+        abA = llm.slop.slopbox.SlopPlayer.current?.abMarkers?.first ?: -1,
+        abB = llm.slop.slopbox.SlopPlayer.current?.abMarkers?.second ?: -1,
+        cueMarks = llm.slop.slopbox.SlopPlayer.current?.cuesheet?.tracks?.drop(1)?.map { it.offsetMs } ?: emptyList(),
     )
 }
 
@@ -272,6 +282,7 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
         GoldBar(
             fraction = if (dur > 0) shown.toFloat() / dur else 0f,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(22.dp),
+            marks = if (dur > 0) BarMarks(dur, if (s.rbRepeat == 4) s.abA else -1, if (s.rbRepeat == 4) s.abB else -1, s.cueMarks) else null,
         ) { f, done ->
             if (dur <= 0) return@GoldBar
             val ms = (f * dur).toLong()
@@ -287,6 +298,22 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
                 if (dur > 0) fmt((dur - shown).coerceAtLeast(0)) else "",
                 Modifier.weight(1f), style = Cabbie.small.copy(textAlign = TextAlign.End),
             )
+        }
+
+        // A-B repeat (Repeat: A-B): set A, set B (and go back to A), clear --
+        // Rockbox's ACTION_WPS_ABSETA / ABSETB / ABRESET.
+        if (s.rbRepeat == 4) {
+            Row(Modifier.fillMaxWidth().height(44.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                for ((label, cmd) in listOf("A" to llm.slop.slopbox.PlaybackService.CMD_AB_SET_A,
+                    "B" to llm.slop.slopbox.PlaybackService.CMD_AB_SET_B,
+                    "A-B ✕" to llm.slop.slopbox.PlaybackService.CMD_AB_RESET)) {
+                    Box(Modifier.weight(1f).fillMaxHeight().glossyPill(Cabbie.gold, Cabbie.GoldDark)
+                        .clickable { controller?.sendCustomCommand(androidx.media3.session.SessionCommand(cmd, android.os.Bundle.EMPTY), android.os.Bundle.EMPTY) },
+                        contentAlignment = Alignment.Center) {
+                        BasicText(label, style = Cabbie.body.copy(color = Color.Black, fontWeight = FontWeight.Bold))
+                    }
+                }
+            }
         }
 
         // Bottom row.
@@ -327,19 +354,17 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
             CtrlButton(Modifier.weight(1f), enabled = s.canShuffle, onTap = {
                 controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }
             }) { Glyph(G.Shuffle, Modifier.size(36.dp), lit = s.canShuffle && s.shuffle) }
-            CtrlButton(Modifier.weight(1f), enabled = s.canRepeat, onTap = {
-                controller?.let {
-                    it.repeatMode = when (it.repeatMode) {
-                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                        else -> Player.REPEAT_MODE_OFF
-                    }
-                }
+            // cabbiev2 "repmode": Rockbox ACTION_TOUCH_REPMODE steps the Repeat
+            // setting through Off, All, One, Shuffle, A-B.
+            CtrlButton(Modifier.weight(1f), onTap = {
+                val st = llm.slop.slopbox.SettingsStore.get(ctx)
+                st.catalog.byCfg["repeat"]?.let { r -> st.set(r, (st.int(r) + 1) % 5) }
             }) {
-                val g = when {
-                    !s.canRepeat -> G.RepeatOff
-                    s.repeat == Player.REPEAT_MODE_ONE -> G.RepeatOne
-                    s.repeat == Player.REPEAT_MODE_ALL -> G.RepeatAll
+                val g = when (s.rbRepeat) {
+                    1 -> G.RepeatAll
+                    2 -> G.RepeatOne
+                    3 -> G.RepeatShuffle
+                    4 -> G.RepeatAB
                     else -> G.RepeatOff
                 }
                 Glyph(g, Modifier.size(36.dp))
@@ -444,9 +469,12 @@ private fun VolumeBar(ctx: Context, volume: Float, onTouch: () -> Unit) {
     }
 }
 
+/** What Rockbox draws on the progress bar: A-B markers and cuesheet track marks. */
+class BarMarks(val lengthMs: Long, val a: Long, val b: Long, val cues: List<Long>)
+
 /** Grey pill track with a gold fill; tap or drag reports a fraction ([done] on release). */
 @Composable
-fun GoldBar(fraction: Float, modifier: Modifier, onScrub: ((Float, Boolean) -> Unit)? = null) {
+fun GoldBar(fraction: Float, modifier: Modifier, marks: BarMarks? = null, onScrub: ((Float, Boolean) -> Unit)? = null) {
     val scrub by rememberUpdatedState(onScrub)
     Box(
         modifier.then(
@@ -475,6 +503,29 @@ fun GoldBar(fraction: Float, modifier: Modifier, onScrub: ((Float, Boolean) -> U
         val fr = fraction.coerceIn(0f, 1f)
         if (fr > 0f) {
             Box(Modifier.fillMaxWidth(fr).fillMaxHeight(0.8f).glossyPill(Cabbie.gold, Cabbie.GoldDark))
+        }
+        if (marks != null && marks.lengthMs > 0) androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+            val h = size.height
+            val y0 = h * 0.1f
+            val bh = h * 0.8f
+            fun x(ms: Long) = size.width * (ms.toFloat() / marks.lengthMs).coerceIn(0f, 1f)
+            val markColor = Color.White
+            // cue_draw_markers(): a line at each cue track start.
+            for (c in marks.cues) drawLine(markColor, androidx.compose.ui.geometry.Offset(x(c), y0),
+                androidx.compose.ui.geometry.Offset(x(c), y0 + bh), 2f)
+            // ab_draw_markers(): arrows into the A-B section, or lines when too close.
+            val arrowW = (bh + 1) / 2
+            val xa = x(marks.a); val xb = x(marks.b)
+            if (marks.a >= 0 && marks.b >= 0 && xb - xa < arrowW * 2) {
+                drawLine(markColor, androidx.compose.ui.geometry.Offset(xa, y0), androidx.compose.ui.geometry.Offset(xa, y0 + bh), 3f)
+                drawLine(markColor, androidx.compose.ui.geometry.Offset(xb, y0), androidx.compose.ui.geometry.Offset(xb, y0 + bh), 3f)
+            } else {
+                fun arrow(xp: Float, dir: Int) = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(xp, y0); lineTo(xp + dir * arrowW, y0 + bh / 2); lineTo(xp, y0 + bh); close()
+                }
+                if (marks.a >= 0) drawPath(arrow(xa, 1), markColor)
+                if (marks.b >= 0) drawPath(arrow(xb, -1), markColor)
+            }
         }
     }
 }

@@ -17,6 +17,7 @@
  */
 package llm.slop.slopbox.ui
 
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -37,7 +38,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
  * Vector redraws of the cabbiev2 / Tango pictures. Drawn in a unit square, so
  * they scale to any size. [lit] false draws the greyed "off" variant.
  */
-enum class G { Play, Pause, Stop, Next, Prev, Shuffle, RepeatAll, RepeatOne, RepeatOff, Volume,
+enum class G { Play, Pause, Stop, Next, Prev, Shuffle, RepeatAll, RepeatOne, RepeatOff, RepeatShuffle, RepeatAB, Volume,
     Folder, ListQ, ListC, TangoFolder, TangoNote, Cursor, Back, Config }
 
 @Composable
@@ -62,6 +63,9 @@ fun Glyph(g: G, modifier: Modifier, lit: Boolean = true, level: Float = 1f) {
             }
             G.Shuffle -> shuffle(body)
             G.RepeatAll, G.RepeatOne, G.RepeatOff -> repeat(if (g == G.RepeatOff) Cabbie.track else body, g == G.RepeatOne)
+            // cabbiev2's repeat frames mark Shuffle "S" and A-B "AB".
+            G.RepeatShuffle -> repeat(body, false, "S")
+            G.RepeatAB -> repeat(body, false, "AB")
             G.Volume -> volume(body, level)
             G.Folder -> folder(body, rim)
             G.ListQ, G.ListC -> listSheet(body, rim)
@@ -137,7 +141,7 @@ private fun DrawScope.shuffle(body: Brush) {
     drawPath(poly(0.72f to 0.56f, 0.96f to 0.72f, 0.72f to 0.88f), body)
 }
 
-private fun DrawScope.repeat(body: Brush, one: Boolean) {
+private fun DrawScope.repeat(body: Brush, one: Boolean, mark: String? = null) {
     val s = Stroke(size.width * 0.09f, cap = StrokeCap.Round, join = StrokeJoin.Round)
     // A loop with a gap at the top right, arrowhead closing it.
     val loop = Path().apply {
@@ -151,6 +155,18 @@ private fun DrawScope.repeat(body: Brush, one: Boolean) {
     }
     drawPath(loop, body, style = s)
     drawPath(poly(0.58f to 0.08f, 0.8f to 0.25f, 0.58f to 0.42f), body)
+    if (mark != null) {
+        drawCircle(Color.Black, radius = size.width * (if (mark.length > 1) 0.22f else 0.16f), center = pt(0.5f, 0.5f))
+        val paint = android.graphics.Paint().apply {
+            isAntiAlias = true
+            color = android.graphics.Color.rgb(0xFD, 0xC8, 0x2A)
+            textAlign = android.graphics.Paint.Align.CENTER
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            textSize = size.height * (if (mark.length > 1) 0.24f else 0.3f)
+        }
+        val fm = paint.fontMetrics
+        drawContext.canvas.nativeCanvas.drawText(mark, 0.5f * size.width, 0.5f * size.height - (fm.ascent + fm.descent) / 2, paint)
+    }
     if (one) {
         drawCircle(Color.Black, radius = size.width * 0.16f, center = pt(0.5f, 0.5f))
         drawPath(

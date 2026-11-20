@@ -249,6 +249,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
 
     private val abMode get() = repeat == 4
 
+    /** The A and B markers (ms, -1 when unset), for the WPS to draw. */
+    val abMarkers: Pair<Long, Long> get() = abA to abB
+
     fun setAbA() {
         if (!abMode || !engineActive) return
         val p = position - EAR_TO_HAND_MS

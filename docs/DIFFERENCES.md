@@ -66,12 +66,15 @@ Anything new goes here in the same change that introduces it.
 - **Shuffle.** Tracks added while shuffled are appended to the remembered
   natural order. Turning shuffle off therefore puts them at the end, not where
   they were inserted.
-- **Repeat from the player buttons.** The notification, lock screen and
-  playing-screen buttons cycle Off/All/One (Media3's modes). Shuffle and A-B
-  are set from the Settings menu.
-- **A-B repeat.** There are no playing-screen buttons yet. The A, B and reset
-  actions exist as session commands (`PlaybackService.CMD_AB_*`). The B marker
-  is checked every 50 ms against Rockbox's 200 ms window.
+- **Repeat from the player buttons.** The playing screen's repeat button
+  steps through all five Rockbox modes (Off, All, One, Shuffle, A-B), as
+  cabbiev2's does. The notification and lock screen know only Media3's
+  Off/All/One.
+- **A-B repeat.** Rockbox sets A and B with hardware buttons; cabbiev2's
+  touch screen has none for it. In SlopBox, with Repeat set to A-B, a row of
+  A, B and A-B ✕ (clear) buttons appears above the controls. The markers are
+  drawn on the progress bar as Rockbox does. The B marker is checked every
+  50 ms against Rockbox's 200 ms window.
 - **Party Mode.** Rockbox's playing screen also refuses Play while paused.
   SlopBox lets a paused player resume, and locks pause, stop, seek and skip
   only while music plays. Playing from the database queues tracks last;

@@ -68,6 +68,26 @@ struct sb_tags {
 /* Read tags without playing. Thread-safe; doesn't close fd. 0 on success. */
 int sb_read_tags(int fd, const char *name, struct sb_tags *out);
 
+/* An embedded cuesheet, as Rockbox finds it (look_for_cuesheet_file): either
+ * text inside the file (kind 1: pos/size/encoding, encoding 1 ISO-8859-1,
+ * 2 UTF-8, 3 UTF-16LE, 4 UTF-16BE) or chapters (kind 2), read with Rockbox's
+ * id3_read_chapters()/mp4_read_chapters() and kept in time order like
+ * cue_add_chapter(). kind 0: none. */
+#define SB_CUE_MAX_CHAPTERS 99
+struct sb_cue_chapter {
+    unsigned long ms;
+    char title[241];
+};
+struct sb_embedded_cue {
+    int kind;
+    long pos;
+    int size;
+    int encoding;
+    int count;
+    struct sb_cue_chapter chapters[SB_CUE_MAX_CHAPTERS];
+};
+int sb_read_embedded_cue(int fd, const char *name, struct sb_embedded_cue *out);
+
 /* These may be called from any thread while a file plays. */
 void sb_stop(void);
 void sb_seek_ms(long ms);

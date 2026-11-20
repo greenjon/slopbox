@@ -42,6 +42,10 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         /** Rockbox tags, read on demand (Single Mode compares them). */
         var tags: Engine.RockboxTags? = null
         var tagsRead = false
+        /** Rockbox cuesheet for this file, if Cuesheet Support found one. */
+        var cue: Cuesheet? = null
+        var cueLoaded = false
+        var cueTrack = -1
         val uri: Uri? get() = item.localConfiguration?.uri ?: item.requestMetadata.mediaUri
         val dirId: String? get() = item.requestMetadata.extras?.getString(llm.slop.slopbox.ui.MusicTree.EXTRA_DIR)
         val treeUri: String? get() = item.requestMetadata.extras?.getString(llm.slop.slopbox.ui.MusicTree.EXTRA_TREE)
@@ -454,6 +458,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         val (pfd, name) = opened
         queuedNext = null
         seekTarget = -1
+        loadCue(entry)
         serialEntries.clear()
         val serial = Engine.play(pfd.detachFd(), name, startMs, paused = !playWhenReady)
         engineActive = serial >= 0
@@ -584,8 +589,17 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
                 serialEntries.keys.removeAll { it < p - 8 }
                 heldPositionMs = 0
                 seekTarget = -1
+                loadCue(entries.getOrNull(index))
                 invalidateState()
                 savePlaylist()
+            }
+            // Rockbox cuesheet_subtrack_changed(): follow the cue track being heard.
+            entries.getOrNull(index)?.let { e ->
+                val cue = currentCue
+                if (cue != null) {
+                    val t = cue.currentTrack(position)
+                    if (t != e.cueTrack) { e.cueTrack = t; invalidateState() }
+                }
             }
             // A-B: reaching B (within Rockbox's 200 ms window) jumps back to A.
             if (abMode && abB >= 0 && playWhenReady) {
@@ -656,7 +670,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         val playlist = entries.map { e ->
             MediaItemData.Builder(e.uid)
                 .setMediaItem(e.item)
-                .setMediaMetadata(e.metadata ?: e.item.mediaMetadata)
+                .setMediaMetadata(cueMetadata(e, e.metadata ?: e.item.mediaMetadata))
                 .setDurationUs(if (e.durationMs == C.TIME_UNSET) C.TIME_UNSET else e.durationMs * 1000)
                 .setIsSeekable(true)
                 .build()
@@ -894,7 +908,12 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         val step = setting("skip length") * 1000L
         var elapsed = position
         val length = entries.getOrNull(index)?.durationMs?.takeIf { it != C.TIME_UNSET } ?: Long.MAX_VALUE / 4
-        val remaining = length - elapsed
+        var remaining = length - elapsed
+        // With a cuesheet, "remaining" is to the next cue track (wps.c play_hop()).
+        currentCue?.let { cue ->
+            val next = cue.currentTrack(elapsed) + 1
+            if (next < cue.tracks.size) remaining = cue.tracks[next].offsetMs - elapsed
+        }
         val prevent = setting("prevent track skip") != 0
         when {
             step < 0 -> {   // Skip to Outro
@@ -921,7 +940,10 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
 
     /** Rockbox prev_track(): restart the track, or the previous one in the first seconds. */
     private fun prevTrack(threshMs: Long) {
-        if (position >= threshMs) return jumpTo(C.INDEX_UNSET, 0)
+        if (position >= threshMs) {
+            currentCue?.skip(-1, position)?.let { return seekWithin(it) }   // curr_cuesheet_skip()
+            return jumpTo(C.INDEX_UNSET, 0)
+        }
         val prev = when {
             index > 0 -> index - 1
             repeat == 1 || repeat == 3 -> entries.size - 1
@@ -935,6 +957,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     /** Rockbox audio_next(): the next track; past the end, wrap with repeat or change
      *  folder, else just the "no more" beep. */
     private fun nextTrack() {
+        currentCue?.skip(1, position)?.let { return seekWithin(it) }        // curr_cuesheet_skip()
         when {
             index + 1 < entries.size -> { beep(noMore = false); jumpTo(index + 1, 0) }
             repeat == 3 -> {
@@ -1078,6 +1101,47 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         } ?: false
         if (!asked) holdStart = false
         return asked
+    }
+
+    // ---- Cuesheets (Rockbox apps/cuesheet.c) -----------------------------------------
+
+    /** Rockbox playback.c: look for the track's cuesheet when it's buffered. */
+    private fun loadCue(e: Entry?) {
+        e ?: return
+        if (e.cueLoaded || setting("cuesheet support") == 0) return
+        e.cueLoaded = true
+        val uri = e.uri ?: return
+        val tree = e.treeUri?.let(Uri::parse)
+        val dir = e.dirId
+        val name = fileName(e)
+        scope.launch {
+            val cue = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { Cuesheet.find(context, uri, name, tree, dir) }.getOrNull()
+            }
+            if (cue != null) {
+                e.cue = cue
+                e.cueTrack = -1
+                invalidateState()
+            }
+        }
+    }
+
+    /** The cuesheet of the track being heard, when Cuesheet Support is on. */
+    private val currentCue: Cuesheet?
+        get() = if (setting("cuesheet support") != 0) entries.getOrNull(index)?.cue else null
+
+    /** What the skin shows for a cue track: its title and performer, the sheet as album. */
+    private fun cueMetadata(e: Entry, base: MediaMetadata): MediaMetadata {
+        val cue = e.cue ?: return base
+        if (e.cueTrack < 0 || setting("cuesheet support") == 0) return base
+        val t = cue.tracks.getOrNull(e.cueTrack) ?: return base
+        return base.buildUpon()
+            .setTitle(t.title.ifEmpty { base.title?.toString() })
+            .setArtist(t.performer.ifEmpty { base.artist?.toString() })
+            .setAlbumTitle(cue.title.ifEmpty { base.albumTitle?.toString() })
+            .setTrackNumber(e.cueTrack + 1)
+            .setTotalTrackCount(cue.tracks.size)
+            .build()
     }
 
     // ---- Power management (PowerMgmt) ---------------------------------------------

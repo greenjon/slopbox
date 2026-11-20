@@ -86,7 +86,12 @@ Anything new goes here in the same change that introduces it.
 - **FF/RW.** The acceleration follows Rockbox's `ffwd_rew()`, but steps
   repeat every 150 ms of holding (the UI's rate), not at Rockbox's button
   repeat rate.
-- **Cuesheet support** isn't implemented.
+- **Cuesheets.** Rockbox also looks in `/.rockbox/cue/`. SlopBox doesn't,
+  and checks only the embedded cuesheet or chapters, `<name>.cue` beside the
+  file, and `<file>.cue`. Cuesheets without a BOM are read as ISO-8859-1;
+  Rockbox uses the Default Codepage setting. The playing screen doesn't draw
+  Rockbox's cue markers on the progress bar, and there is no "View Cuesheet"
+  screen yet.
 - **Automatic Resume.** Resume points are kept per file in SlopBox. Rockbox
   keeps them in the database (`tagcache`), so there only database tracks get
   them. "In custom directories only" behaves like "No", because there's no

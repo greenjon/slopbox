@@ -600,6 +600,55 @@ int sb_read_tags(int fd, const char *name, struct sb_tags *t)
     return ret;
 }
 
+/* Rockbox cue_add_chapter(): keep chapters in order of their start. */
+static void add_chapter(void *ctx, unsigned long ms, const char *title)
+{
+    struct sb_embedded_cue *cue = ctx;
+    if (cue->count >= SB_CUE_MAX_CHAPTERS) {
+        if (ms >= cue->chapters[SB_CUE_MAX_CHAPTERS - 1].ms)
+            return;
+        cue->count--;
+    }
+    int i = cue->count++;
+    for (; i > 0 && cue->chapters[i - 1].ms > ms; i--)
+        cue->chapters[i] = cue->chapters[i - 1];
+    cue->chapters[i].ms = ms;
+    copy_str(cue->chapters[i].title, sizeof(cue->chapters[i].title), title);
+}
+
+int sb_read_embedded_cue(int fd, const char *name, struct sb_embedded_cue *out)
+{
+    static struct mp3entry id3;
+    static pthread_mutex_t cue_lock = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&cue_lock);
+    memset(out, 0, sizeof(*out));
+    int ret = -1;
+    if (read_metadata(&id3, fd, name)) {
+        ret = 0;
+        if (id3.has_embedded_cuesheet) {
+            int enc = id3.embedded_cuesheet.encoding;
+            out->pos = (long)id3.embedded_cuesheet.pos;
+            out->size = id3.embedded_cuesheet.size;
+            out->encoding = enc;
+            if (enc >= CHAR_ENC_MP4_CHPL) {
+                lseek(fd, id3.embedded_cuesheet.pos, SEEK_SET);
+                if (enc == CHAR_ENC_ID3V23_CHAP || enc == CHAR_ENC_ID3V24_CHAP)
+                    id3_read_chapters(fd, out->size, enc == CHAR_ENC_ID3V24_CHAP,
+                                      add_chapter, out);
+                else
+                    mp4_read_chapters(fd, out->size, enc == CHAR_ENC_MP4_CHPL,
+                                      add_chapter, out);
+                /* One chapter gives nothing to skip between. */
+                out->kind = out->count > 1 ? 2 : 0;
+            } else {
+                out->kind = 1;
+            }
+        }
+    }
+    pthread_mutex_unlock(&cue_lock);
+    return ret;
+}
+
 int sb_play_fd(int fd, const char *name, long start_ms, int serial,
                bool auto_skip, struct sb_track_info *info_out)
 {

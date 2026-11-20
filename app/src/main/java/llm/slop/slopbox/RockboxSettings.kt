@@ -382,7 +382,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "idle poweroff", "sleeptimer duration", "sleeptimer on startup",
             "keypress restarts sleeptimer", "show shutdown message",
             "autocreate bookmarks", "autoupdate bookmarks", "autoload bookmarks",
-            "use most-recent-bookmarks",
+            "use most-recent-bookmarks", "cuesheet support",
         )
 
         @Volatile private var instance: SettingsStore? = null

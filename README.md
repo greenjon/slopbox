@@ -53,7 +53,8 @@ modes, both delays and durations, and Mix mode. Also in step with Rockbox:
 Single Mode, Party Mode, A-B repeat (as session commands; the playing screen
 has no buttons yet), Track Skip Beep, Auto-Change Directory, Logging, Album
 Art, FF/RW acceleration, playlist resume with Rewind Before Resume and Start
-Screen, and Automatic Resume.
+Screen, Automatic Resume, cuesheets (embedded, chapters and .cue files),
+bookmarks, the sleep timer and Idle Poweroff.
 
 ## Layout
 

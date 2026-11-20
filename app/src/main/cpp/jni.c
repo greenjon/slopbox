@@ -467,3 +467,46 @@ Java_llm_slop_slopbox_Engine_nativeBeep(JNIEnv *env, jobject thiz,
 {
     sb_beep((unsigned)freq, (unsigned)ms, (unsigned)amplitude);
 }
+
+/* Embedded cuesheet: ["text", pos, size, encoding], ["chapters", ms, title, ...],
+ * or null when there's none. Doesn't take ownership of fd. */
+JNIEXPORT jobjectArray JNICALL
+Java_llm_slop_slopbox_Engine_nativeReadEmbeddedCue(JNIEnv *env, jobject thiz,
+                                                   jint fd, jstring jname)
+{
+    static struct sb_embedded_cue cue;
+    static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&lock);
+    const char *name = (*env)->GetStringUTFChars(env, jname, NULL);
+    int r = sb_read_embedded_cue(fd, name, &cue);
+    (*env)->ReleaseStringUTFChars(env, jname, name);
+    jobjectArray a = NULL;
+    if (r == 0 && cue.kind != 0) {
+        jclass str = (*env)->FindClass(env, "java/lang/String");
+        char num[32];
+        if (cue.kind == 1) {
+            a = (*env)->NewObjectArray(env, 4, str, NULL);
+            (*env)->SetObjectArrayElement(env, a, 0, (*env)->NewStringUTF(env, "text"));
+            snprintf(num, sizeof(num), "%ld", cue.pos);
+            (*env)->SetObjectArrayElement(env, a, 1, (*env)->NewStringUTF(env, num));
+            snprintf(num, sizeof(num), "%d", cue.size);
+            (*env)->SetObjectArrayElement(env, a, 2, (*env)->NewStringUTF(env, num));
+            snprintf(num, sizeof(num), "%d", cue.encoding);
+            (*env)->SetObjectArrayElement(env, a, 3, (*env)->NewStringUTF(env, num));
+        } else {
+            a = (*env)->NewObjectArray(env, 1 + cue.count * 2, str, NULL);
+            (*env)->SetObjectArrayElement(env, a, 0, (*env)->NewStringUTF(env, "chapters"));
+            for (int i = 0; i < cue.count; i++) {
+                snprintf(num, sizeof(num), "%lu", cue.chapters[i].ms);
+                jstring n = (*env)->NewStringUTF(env, num);
+                jstring t = (*env)->NewStringUTF(env, cue.chapters[i].title);
+                (*env)->SetObjectArrayElement(env, a, 1 + i * 2, n);
+                (*env)->SetObjectArrayElement(env, a, 2 + i * 2, t);
+                (*env)->DeleteLocalRef(env, n);
+                (*env)->DeleteLocalRef(env, t);
+            }
+        }
+    }
+    pthread_mutex_unlock(&lock);
+    return a;
+}

@@ -76,6 +76,10 @@ object Engine {
         )
     }
 
+    /** Embedded cuesheet via Rockbox: ["text", pos, size, encoding] or
+     *  ["chapters", ms, title, ...]; null when none. [fd] stays open. */
+    fun readEmbeddedCue(fd: Int, name: String): Array<String>? = nativeReadEmbeddedCue(fd, name)
+
     fun trackInfo(): TrackInfo {
         val a = nativeTrackInfo()
         return TrackInfo(a[0], a[1], a[2], a[3], a[4].toLong(), a[5].toLong(), a[6].toInt())
@@ -109,6 +113,7 @@ object Engine {
     private external fun nativeSeekMs(ms: Long)
     private external fun nativeTrackInfo(): Array<String>
     private external fun nativeReadTags(fd: Int, name: String): Array<String>?
+    private external fun nativeReadEmbeddedCue(fd: Int, name: String): Array<String>?
     private external fun nativeSetSetting(id: Int, value: Int)
     private external fun nativeSetEqBand(band: Int, type: Int, hz: Int, q: Int, gain: Int)
     private external fun nativeSetShuffle(on: Boolean)

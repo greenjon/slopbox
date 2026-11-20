@@ -41,6 +41,23 @@ class PlaybackService : MediaSessionService() {
             override fun sleepPause() = player.sleepPause()
             override fun powerOff() = player.powerOff { stopSelf() }
         }.also { PowerMgmt.attach(this, it) }
+        // Rockbox's yes/no and bookmark-list prompts, asked through the app's screen.
+        player.askUi = ask@{ kind, payload, answer ->
+            val s = session ?: return@ask false
+            val ui = s.connectedControllers.firstOrNull {
+                it.packageName == packageName && !s.isMediaNotificationController(it)
+            } ?: return@ask false
+            val args = android.os.Bundle().apply {
+                putString(ARG_KIND, kind)
+                putStringArrayList(ARG_LINES, ArrayList(payload))
+            }
+            val f = s.sendCustomCommand(ui, SessionCommand(CMD_ASK, android.os.Bundle.EMPTY), args)
+            f.addListener({
+                val r = runCatching { f.get() }.getOrNull()
+                answer(if (r?.resultCode == SessionResult.RESULT_SUCCESS) r.extras.getInt(ARG_CHOICE, -1) else -1)
+            }, androidx.core.content.ContextCompat.getMainExecutor(this))
+            true
+        }
         session = MediaSession.Builder(this, player)
             .setSessionActivity(openApp)
             .setCallback(object : MediaSession.Callback {
@@ -52,6 +69,8 @@ class PlaybackService : MediaSessionService() {
                         .add(SessionCommand(CMD_AB_SET_A, android.os.Bundle.EMPTY))
                         .add(SessionCommand(CMD_AB_SET_B, android.os.Bundle.EMPTY))
                         .add(SessionCommand(CMD_AB_RESET, android.os.Bundle.EMPTY))
+                        .add(SessionCommand(CMD_BOOKMARK_CREATE, android.os.Bundle.EMPTY))
+                        .add(SessionCommand(CMD_BOOKMARK_PLAY, android.os.Bundle.EMPTY))
                         .build()
                     return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                         .setAvailableSessionCommands(commands)
@@ -80,6 +99,8 @@ class PlaybackService : MediaSessionService() {
                         CMD_AB_SET_A -> player.setAbA()
                         CMD_AB_SET_B -> player.setAbB()
                         CMD_AB_RESET -> player.resetAb()
+                        CMD_BOOKMARK_CREATE -> player.createBookmark(toFile = true)
+                        CMD_BOOKMARK_PLAY -> args.getString(ARG_LINE)?.let { player.playBookmark(it) }
                         else -> return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
                     }
                     return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
@@ -117,6 +138,17 @@ class PlaybackService : MediaSessionService() {
         const val CMD_AB_RESET = "slopbox.AB_RESET"
         const val EXTRA_AB_A = "slopbox.abA"
         const val EXTRA_AB_B = "slopbox.abB"
+
+        /** Bookmarks: create one for the current playlist; play one (ARG_LINE). */
+        const val CMD_BOOKMARK_CREATE = "slopbox.BOOKMARK_CREATE"
+        const val CMD_BOOKMARK_PLAY = "slopbox.BOOKMARK_PLAY"
+        const val ARG_LINE = "line"
+        /** Sent to the app's controller: ARG_KIND (SlopPlayer.ASK_*), ARG_LINES; the
+         *  answer comes back as ARG_CHOICE (1 = yes / bookmark index, -1 = no). */
+        const val CMD_ASK = "slopbox.ASK"
+        const val ARG_KIND = "kind"
+        const val ARG_LINES = "lines"
+        const val ARG_CHOICE = "choice"
     }
 
     override fun onDestroy() {

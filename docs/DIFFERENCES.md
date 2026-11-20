@@ -114,6 +114,23 @@ Anything new goes here in the same change that introduces it.
   (screen, notification, headset, lock screen) and any touch on SlopBox's
   screens counts as a key press. Touches in other apps don't.
 - **Show Shutdown Message** shows a toast ("Shutting down...").
+- **Bookmark files.** Rockbox writes `<folder>.bmark` beside the music and
+  `/.rockbox/most-recent.bmark`. SlopBox keeps the same lines in its own
+  storage (`files/bookmarks/`, `files/most-recent.bmark`), because Android
+  grants it read-only access to the music folder. `bookmark.ignore` and
+  `bookmark.unignore` files aren't checked.
+- **What can be bookmarked.** Only folder playlists, as in Rockbox, but saved
+  playlist files (`.m3u`) aren't supported yet, so they can't be bookmarked.
+- **Shuffled bookmarks.** Rockbox stores its shuffle seed and rebuilds the
+  same order. SlopBox stores the track's place in natural order; loading
+  reshuffles with that track first.
+- **Bookmark details.** The byte offset is written as 0, and SlopBox resumes
+  by time. Pitch and speed are written as 100% and ignored when loading,
+  because there's no pitch screen yet.
+- **Bookmark list actions.** Rockbox offers Resume or Delete from a context
+  menu. In SlopBox you tap to resume and hold to delete.
+- **"Ask" prompts.** They appear only when SlopBox's screen is connected to
+  the player. Stopping from the notification or a headset doesn't ask.
 
 ## Database and tags
 

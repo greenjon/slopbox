@@ -99,6 +99,10 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     private var lastSavedAt = 0L
     /** Serial started by a manual change: its arrival isn't a natural track end. */
     private var manualSerial = -1
+    /** setMediaItems arrived before prepare: check for a bookmark at prepare. */
+    private var pendingAutoload = false
+    /** A bookmark is being loaded (or the user asked which): don't start the queue meanwhile. */
+    private var holdStart = false
 
     private val settingsListener: () -> Unit = {
         val want = setting("shuffle") != 0
@@ -414,7 +418,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             if (!play && wasPlaying && rewind > 0) {
                 seekWithin((position - rewind * 1000L).coerceAtLeast(0))
             }
-        } else if (play && playbackState == Player.STATE_READY && entries.isNotEmpty()) {
+        } else if (play && playbackState == Player.STATE_READY && entries.isNotEmpty() && !holdStart) {
             startCurrent(heldPositionMs)
         }
         updateHolds()
@@ -692,7 +696,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         playbackState = if (entries.isEmpty()) Player.STATE_ENDED else Player.STATE_READY
         if (playbackState == Player.STATE_READY && !engineActive) {
             if (playWhenReady && !requestFocus()) playWhenReady = false
-            startCurrent(heldPositionMs)
+            val autoload = pendingAutoload
+            pendingAutoload = false
+            if (!(autoload && autoloadBookmark())) startCurrent(heldPositionMs)
         }
         updateHolds()
         return Futures.immediateVoidFuture()
@@ -700,6 +706,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
 
     override fun handleStop(): ListenableFuture<*> {
         if (partyLocked) return Futures.immediateVoidFuture()
+        autobookmark(promptOk = true)
         if (engineActive) trackFinished(entries.getOrNull(index), position, autoSkip = false)
         savePlaylist()
         resetAb()
@@ -750,7 +757,10 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             return handleAddMediaItems(entries.size, mediaItems)
         }
         folderJob?.cancel()
-        if (engineActive) trackFinished(entries.getOrNull(index), position, autoSkip = false)
+        if (engineActive) {
+            autobookmark(promptOk = true)
+            trackFinished(entries.getOrNull(index), position, autoSkip = false)
+        }
         resetAb()
         stopEngine()
         entries.clear()
@@ -767,7 +777,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         }
         if (playbackState != Player.STATE_IDLE) {
             playbackState = if (entries.isEmpty()) Player.STATE_ENDED else Player.STATE_READY
-            if (playbackState == Player.STATE_READY) startCurrent(heldPositionMs)
+            if (playbackState == Player.STATE_READY && !autoloadBookmark()) startCurrent(heldPositionMs)
+        } else {
+            pendingAutoload = true
         }
         updateHolds()
         savePlaylist()
@@ -959,6 +971,115 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         savePlaylist()
     }
 
+    // ---- Bookmarks (Rockbox apps/bookmark.c) ----------------------------------------
+
+    val bookmarks = Bookmarks(context)
+
+    /** Asks the UI a question: kind ASK_CREATE (answer 1 = yes) or ASK_LOAD (payload =
+     *  bookmark lines, answer = chosen index, -1 = don't resume). False if no UI. */
+    var askUi: ((kind: String, payload: List<String>, answer: (Int) -> Unit) -> Boolean)? = null
+
+    /** The playlist's bookmark name, if it can be bookmarked (a folder playlist). */
+    val bookmarkPlaylist: String? get() = folderPlaylist()?.second?.let { Bookmarks.playlistName(it) }
+
+    private fun fileName(e: Entry): String =
+        e.uri?.let { u -> PlaybackMemory.pathOf(u).substringAfterLast('/') } ?: e.item.mediaId
+
+    /** Rockbox create_bookmark() from the current state. */
+    private fun bookmarkLine(): String? {
+        val playlist = bookmarkPlaylist ?: return null
+        val e = entries.getOrNull(index) ?: return null
+        val natural = if (shuffled) original.indexOfFirst { it === e }.coerceAtLeast(0) else index
+        return Bookmarks.format(natural, position, 0, repeat, shuffled,
+            Bookmarks.SPEED_100, Bookmarks.SPEED_100, playlist, fileName(e))
+    }
+
+    /** Rockbox write_bookmark(); the "Create Bookmark" menu item writes the file. */
+    fun createBookmark(toFile: Boolean = true): Boolean {
+        val line = bookmarkLine()
+        val ok = line != null && bookmarks.write(line, toFile, toRecent = true, recentMode = setting("use most-recent-bookmarks"))
+        android.widget.Toast.makeText(context,
+            store.catalog.str(if (ok) "LANG_BOOKMARK_CREATE_SUCCESS" else "LANG_BOOKMARK_CREATE_FAILURE"),
+            android.widget.Toast.LENGTH_SHORT).show()
+        return ok
+    }
+
+    /** Rockbox bookmark_autobookmark(), when playback stops. */
+    private fun autobookmark(promptOk: Boolean) {
+        val playlist = bookmarkPlaylist ?: return
+        if (!engineActive && entries.isEmpty()) return
+        if (setting("autoupdate bookmarks") != 0 && bookmarks.exists(playlist)) { createBookmark(true); return }
+        when (setting("autocreate bookmarks")) {
+            1 -> createBookmark(true)                       // Yes
+            3 -> createBookmark(false)                      // Yes - Recent only
+            2, 4 -> if (promptOk) {                         // Ask / Ask - Recent only
+                val line = bookmarkLine() ?: return
+                val toFile = setting("autocreate bookmarks") == 2
+                askUi?.invoke(ASK_CREATE, listOf(line)) { yes ->
+                    if (yes == 1) {
+                        val ok = bookmarks.write(line, toFile, true, setting("use most-recent-bookmarks"))
+                        android.widget.Toast.makeText(context, store.catalog.str(
+                            if (ok) "LANG_BOOKMARK_CREATE_SUCCESS" else "LANG_BOOKMARK_CREATE_FAILURE"),
+                            android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+
+    /** Rockbox play_bookmark(): the bookmark's folder, repeat and shuffle, at its track and time. */
+    fun playBookmark(line: String) {
+        val bm = Bookmarks.parse(line) ?: return
+        val tree = llm.slop.slopbox.ui.MusicTree.root(context) ?: return
+        val dirId = Bookmarks.dirDocId(tree, bm.playlist)
+        folderJob?.cancel()
+        holdStart = true
+        folderJob = scope.launch {
+            val docs = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                llm.slop.slopbox.ui.MusicTree.list(context, tree, dirId)
+            }.filter { !it.isDir }
+            if (docs.isEmpty()) { holdStart = false; return@launch }
+            val dirDoc = llm.slop.slopbox.ui.Doc(dirId, bm.playlist.trim('/').substringAfterLast('/'), true)
+            if (engineActive) trackFinished(entries.getOrNull(index), position, autoSkip = false)
+            stopEngine()
+            entries.clear()
+            docs.forEach { entries += Entry(nextUid++, llm.slop.slopbox.ui.MusicTree.item(tree, it, dirDoc)) }
+            shuffled = false
+            syncOriginal()
+            store.catalog.byCfg["repeat"]?.let { store.set(it, bm.repeat) }
+            index = docs.indexOfFirst { it.name == bm.file }.takeIf { it >= 0 } ?: bm.index.coerceIn(0, entries.size - 1)
+            if (bm.shuffle) applyShuffle(true, keepCurrentFirst = true)
+            store.catalog.byCfg["shuffle"]?.let { store.set(it, if (bm.shuffle) 1 else 0) }
+            playbackState = Player.STATE_READY
+            playWhenReady = requestFocus()
+            holdStart = false
+            startCurrent((bm.elapsedMs - setting("resume rewind") * 1000L).coerceAtLeast(1))
+            updateHolds()
+            invalidateState()
+            savePlaylist()
+        }
+    }
+
+    /** Rockbox bookmark_autoload(), for a folder playlist that was just set up.
+     *  True if it took over starting playback. */
+    private fun autoloadBookmark(): Boolean {
+        val mode = setting("autoload bookmarks")
+        val playlist = bookmarkPlaylist ?: return false
+        if (mode == 0 || !bookmarks.exists(playlist)) return false
+        val list = bookmarks.list(playlist)
+        if (list.isEmpty()) return false
+        if (mode == 1) { playBookmark(list.first().line); return true }
+        holdStart = true
+        val asked = askUi?.invoke(ASK_LOAD, list.map { it.line }) { choice ->
+            holdStart = false
+            val bm = list.getOrNull(choice)
+            if (bm != null) playBookmark(bm.line)
+            else if (!engineActive) { startCurrent(heldPositionMs); updateHolds(); invalidateState() }
+        } ?: false
+        if (!asked) holdStart = false
+        return asked
+    }
+
     // ---- Power management (PowerMgmt) ---------------------------------------------
 
     val isPlayingNow: Boolean get() = playWhenReady && engineActive
@@ -972,6 +1093,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
 
     /** Rockbox clean shutdown, for playback: stop (with the stop fade), save resume. */
     fun powerOff(done: () -> Unit) {
+        autobookmark(promptOk = false)
         if (setting("show shutdown message") != 0) {
             android.widget.Toast.makeText(context, store.catalog.str("LANG_SHUTTINGDOWN"), android.widget.Toast.LENGTH_SHORT).show()
         }
@@ -1023,6 +1145,8 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         /** "single mode" values (settings.h SINGLE_MODE_*). */
         private const val SINGLE_TRACK = 1
         private const val SINGLE_PLAYLIST = 8
+        const val ASK_CREATE = "create"
+        const val ASK_LOAD = "load"
         /** "start in screen": Resume Playback. */
         const val START_SCREEN_RESUME_PLAYBACK = 4
     }

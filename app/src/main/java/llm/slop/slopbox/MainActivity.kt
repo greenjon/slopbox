@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller by mutableStateOf<MediaController?>(null)
+    private var ask by mutableStateOf<llm.slop.slopbox.ui.AskRequest?>(null)
     /** Files to play once the controller connects. */
     private var pending: List<Uri>? = null
     private val nav = Nav()
@@ -70,14 +71,36 @@ class MainActivity : ComponentActivity() {
             handleIntent(intent)
         }
         setContent {
-            SlopApp(controller, nav, browser, database, pickRoot = { pickRoot.launch(null) })
+            androidx.compose.foundation.layout.Box {
+                SlopApp(controller, nav, browser, database, pickRoot = { pickRoot.launch(null) })
+                ask?.let { llm.slop.slopbox.ui.AskOverlay(it) }
+            }
         }
     }
 
     override fun onStart() {
         super.onStart()
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
-        val future = MediaController.Builder(this, token).buildAsync()
+        val future = MediaController.Builder(this, token).setListener(object : MediaController.Listener {
+            // The player's questions (Rockbox's "Create a Bookmark?" and bookmark list).
+            override fun onCustomCommand(
+                controller: MediaController,
+                command: androidx.media3.session.SessionCommand,
+                args: Bundle,
+            ): ListenableFuture<androidx.media3.session.SessionResult> {
+                if (command.customAction != PlaybackService.CMD_ASK) return super.onCustomCommand(controller, command, args)
+                val result = com.google.common.util.concurrent.SettableFuture.create<androidx.media3.session.SessionResult>()
+                ask = llm.slop.slopbox.ui.AskRequest(
+                    args.getString(PlaybackService.ARG_KIND) ?: "",
+                    args.getStringArrayList(PlaybackService.ARG_LINES) ?: arrayListOf(),
+                ) { choice ->
+                    ask = null
+                    result.set(androidx.media3.session.SessionResult(androidx.media3.session.SessionResult.RESULT_SUCCESS,
+                        Bundle().apply { putInt(PlaybackService.ARG_CHOICE, choice) }))
+                }
+                return result
+            }
+        }).buildAsync()
         controllerFuture = future
         future.addListener({
             val c = future.get()

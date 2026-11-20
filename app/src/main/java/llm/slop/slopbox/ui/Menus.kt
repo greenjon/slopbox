@@ -175,6 +175,8 @@ fun WpsContextMenu(nav: Nav) {
     Column(Modifier.fillMaxSize()) {
         TitleBar("Context Menu", onBack = { nav.pop() })
         RockRow("Playlist", icon = G.TangoNote) { nav.pop(); nav.push(Screen.Playlist) }
+        RockRow(llm.slop.slopbox.SettingsStore.get(androidx.compose.ui.platform.LocalContext.current).catalog.str("LANG_BOOKMARK_MENU"),
+            icon = G.TangoNote) { nav.pop(); nav.push(Screen.Bookmarks) }
         RockRow("Sound Settings", icon = G.TangoNote) { nav.pop(); nav.push(Screen.Sound) }
         RockRow("Show Track Info", icon = G.TangoNote) { nav.pop(); nav.push(Screen.TrackInfo) }
     }

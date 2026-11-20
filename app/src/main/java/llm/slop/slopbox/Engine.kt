@@ -33,6 +33,33 @@ object Engine {
     val elapsedMs: Long get() = nativeElapsedMs()
     fun seekMs(ms: Long) = nativeSeekMs(ms)
 
+    /** A file's tags as Rockbox's own parser (get_metadata) reads them. */
+    data class RockboxTags(
+        val title: String, val artist: String, val album: String, val albumArtist: String,
+        val genre: String, val composer: String, val comment: String, val grouping: String,
+        /** As written in the file, e.g. "1/2", "3/12", "1999-05-01". */
+        val disc: String, val track: String, val year: String,
+        val musicBrainzTrackId: String, val codec: String,
+        val trackNum: Int, val discNum: Int, val yearNum: Int,
+        val lengthMs: Long, val frequency: Long, val bitrate: Int,
+        /** ReplayGain as Rockbox keeps it: linear factors, 1 shl 24 = unity, 0 = none. */
+        val trackGain: Long, val albumGain: Long, val trackPeak: Long, val albumPeak: Long,
+        /** Embedded art: 1 BMP, 2 PNG, 3 JPG, 0 none; flags bit 0 ID3 unsync, bit 1 Vorbis base64. */
+        val artType: Int, val artFlags: Int, val artPos: Long, val artSize: Int,
+    )
+
+    /** Read tags without playing; [fd] stays open (caller closes it). Null if unreadable. */
+    fun readTags(fd: Int, name: String): RockboxTags? {
+        val a = nativeReadTags(fd, name) ?: return null
+        fun i(k: Int) = a[k].toIntOrNull() ?: 0
+        fun l(k: Int) = a[k].toLongOrNull() ?: 0L
+        return RockboxTags(
+            a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12],
+            i(13), i(14), i(15), l(16), l(17), i(18), l(19), l(20), l(21), l(22),
+            i(23), i(24), l(25), i(26),
+        )
+    }
+
     fun trackInfo(): TrackInfo {
         val a = nativeTrackInfo()
         return TrackInfo(a[0], a[1], a[2], a[3], a[4].toLong(), a[5].toLong(), a[6].toInt())
@@ -62,6 +89,7 @@ object Engine {
     private external fun nativeElapsedMs(): Long
     private external fun nativeSeekMs(ms: Long)
     private external fun nativeTrackInfo(): Array<String>
+    private external fun nativeReadTags(fd: Int, name: String): Array<String>?
     private external fun nativeSetSetting(id: Int, value: Int)
     private external fun nativeSetEqBand(band: Int, type: Int, hz: Int, q: Int, gain: Int)
     private external fun nativeSetShuffle(on: Boolean)

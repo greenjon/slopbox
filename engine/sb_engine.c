@@ -490,6 +490,65 @@ static void copy_str(char *dst, size_t n, const char *src)
     snprintf(dst, n, "%s", src ? src : "");
 }
 
+/* get_metadata() isn't known to be reentrant; one parse at a time. */
+static pthread_mutex_t metadata_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static bool read_metadata(struct mp3entry *id3, int fd, const char *name)
+{
+    pthread_mutex_lock(&metadata_lock);
+    memset(id3, 0, sizeof(*id3));
+    lseek(fd, 0, SEEK_SET);
+    bool ok = get_metadata(id3, fd, name);
+    pthread_mutex_unlock(&metadata_lock);
+    return ok;
+}
+
+int sb_read_tags(int fd, const char *name, struct sb_tags *t)
+{
+    static struct mp3entry id3; /* large; guarded by tags_lock */
+    static pthread_mutex_t tags_lock = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&tags_lock);
+    memset(t, 0, sizeof(*t));
+    int ret = -1;
+    if (read_metadata(&id3, fd, name)) {
+        copy_str(t->title, sizeof(t->title), id3.title);
+        copy_str(t->artist, sizeof(t->artist), id3.artist);
+        copy_str(t->album, sizeof(t->album), id3.album);
+        copy_str(t->albumartist, sizeof(t->albumartist), id3.albumartist);
+        copy_str(t->genre, sizeof(t->genre), id3.genre_string);
+        copy_str(t->composer, sizeof(t->composer), id3.composer);
+        copy_str(t->comment, sizeof(t->comment), id3.comment);
+        copy_str(t->grouping, sizeof(t->grouping), id3.grouping);
+        copy_str(t->disc, sizeof(t->disc), id3.disc_string);
+        copy_str(t->track, sizeof(t->track), id3.track_string);
+        copy_str(t->year, sizeof(t->year), id3.year_string);
+        copy_str(t->mb_track_id, sizeof(t->mb_track_id), id3.mb_track_id);
+        copy_str(t->codec, sizeof(t->codec), audio_formats[id3.codectype].label);
+        t->tracknum = id3.tracknum;
+        t->discnum = id3.discnum;
+        t->year_num = id3.year;
+        t->length_ms = id3.length;
+        t->frequency = id3.frequency;
+        t->bitrate = id3.bitrate;
+        t->track_gain = id3.track_gain;
+        t->album_gain = id3.album_gain;
+        t->track_peak = id3.track_peak;
+        t->album_peak = id3.album_peak;
+#ifdef HAVE_ALBUMART
+        if (id3.has_embedded_albumart) {
+            t->art_type = id3.albumart.type & ((1 << AA_FLAGS_SHIFT) - 1);
+            t->art_flags = (id3.albumart.type & AA_FLAG_ID3_UNSYNC ? 1 : 0)
+                         | (id3.albumart.type & AA_FLAG_VORBIS_BASE64 ? 2 : 0);
+            t->art_pos = (long)id3.albumart.pos;
+            t->art_size = id3.albumart.size;
+        }
+#endif
+        ret = 0;
+    }
+    pthread_mutex_unlock(&tags_lock);
+    return ret;
+}
+
 int sb_play_fd(int fd, const char *name, long start_ms, sb_pcm_sink sink,
                void *user, struct sb_track_info *info_out)
 {
@@ -497,8 +556,7 @@ int sb_play_fd(int fd, const char *name, long start_ms, sb_pcm_sink sink,
         return -1;
 
     struct mp3entry id3;
-    memset(&id3, 0, sizeof(id3));
-    if (!get_metadata(&id3, fd, name)) {
+    if (!read_metadata(&id3, fd, name)) {
         SB_LOG("SlopBox: can't read metadata for %s\n", name);
         return -2;
     }

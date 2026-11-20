@@ -3,7 +3,6 @@ package llm.slop.slopbox.ui
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
@@ -14,6 +13,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import llm.slop.slopbox.RockboxTagFile
 import java.io.File
 
 /** One entry in a folder of the music tree. */
@@ -125,29 +125,22 @@ data class Tags(
 object TagReader {
     private val artCache = HashMap<String, ImageBitmap?>()
 
+    /** Tags and embedded art via Rockbox's own parser; folder images as Rockbox looks for them. */
     suspend fun read(ctx: Context, item: MediaItem, withArt: Boolean): Tags = withContext(Dispatchers.IO) {
         val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri ?: return@withContext Tags()
-        val r = MediaMetadataRetriever()
-        try {
-            if (uri.scheme == "file") r.setDataSource(uri.path) else r.setDataSource(ctx, uri)
-            fun k(key: Int) = r.extractMetadata(key)?.trim().orEmpty()
-            val art = if (!withArt) null else
-                r.embeddedPicture?.let { decode(it) } ?: folderArt(ctx, item, uri)
-            Tags(
-                title = k(MediaMetadataRetriever.METADATA_KEY_TITLE),
-                artist = k(MediaMetadataRetriever.METADATA_KEY_ARTIST),
-                album = k(MediaMetadataRetriever.METADATA_KEY_ALBUM),
-                albumArtist = k(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST),
-                year = k(MediaMetadataRetriever.METADATA_KEY_YEAR).ifEmpty { k(MediaMetadataRetriever.METADATA_KEY_DATE).take(4) },
-                genre = k(MediaMetadataRetriever.METADATA_KEY_GENRE),
-                trackNo = k(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER),
-                art = art,
-            )
-        } catch (e: Exception) {
-            Tags(art = if (withArt) folderArt(ctx, item, uri) else null)
-        } finally {
-            r.release()
-        }
+        val r = RockboxTagFile.read(ctx, uri, withArt = withArt)
+        val art = if (!withArt) null else r?.art?.let { decode(it) } ?: folderArt(ctx, item, uri)
+        val t = r?.tags ?: return@withContext Tags(art = art)
+        Tags(
+            title = t.title.trim(),
+            artist = t.artist.trim(),
+            album = t.album.trim(),
+            albumArtist = t.albumArtist.trim(),
+            year = if (t.yearNum > 0) t.yearNum.toString() else t.year.trim(),
+            genre = t.genre.trim(),
+            trackNo = t.track.trim().ifEmpty { if (t.trackNum > 0) t.trackNum.toString() else "" },
+            art = art,
+        )
     }
 
     // Rockbox looks for cover/folder images next to the track as well.

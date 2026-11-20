@@ -41,6 +41,27 @@ int sb_play_file(const char *path, long start_ms, sb_pcm_sink sink,
 int sb_play_fd(int fd, const char *name, long start_ms, sb_pcm_sink sink,
                void *user, struct sb_track_info *info_out);
 
+/* A file's tags as Rockbox's metadata parser (get_metadata) reads them. */
+struct sb_tags {
+    char title[256], artist[256], album[256], albumartist[256], genre[128],
+         composer[256], comment[512], grouping[256], disc[32], track[32],
+         year[32], mb_track_id[64];
+    char codec[32];
+    int tracknum, discnum, year_num;
+    unsigned long length_ms, frequency;
+    int bitrate;
+    /* ReplayGain as Rockbox keeps it: gains are linear factors with
+     * 1 << 24 = unity (0 when absent); peaks likewise. */
+    long track_gain, album_gain, track_peak, album_peak;
+    /* Embedded album art: type 1 BMP, 2 PNG, 3 JPG (0 none); flags bit 0 ID3
+     * unsynchronised, bit 1 Vorbis base64 (a FLAC picture block). */
+    int art_type, art_flags, art_size;
+    long art_pos;
+};
+
+/* Read tags without playing. Thread-safe; doesn't close fd. 0 on success. */
+int sb_read_tags(int fd, const char *name, struct sb_tags *out);
+
 /* These may be called from any thread while a file plays. */
 void sb_stop(void);
 void sb_seek_ms(long ms);

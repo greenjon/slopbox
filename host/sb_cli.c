@@ -15,6 +15,8 @@
  *     -s MS                    start MS into the file
  *     -F MS                    start a fade-out (Fade on Stop/Pause) after MS
  *
+ *   sb_cli -T FILE...                   print tags (sb_read_tags) and exit
+ *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 #include <stdbool.h>
@@ -23,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "sb_engine.h"
 #include "sb_settings.h"
@@ -67,6 +70,23 @@ int main(int argc, char **argv)
 {
     int opt;
     sb_engine_init(CODEC_PATH_FMT);
+    if (argc > 2 && !strcmp(argv[1], "-T")) {
+        for (int i = 2; i < argc; i++) {
+            struct sb_tags t;
+            int fd = open(argv[i], O_RDONLY);
+            int r = fd < 0 ? -1 : sb_read_tags(fd, argv[i], &t);
+            if (fd >= 0) close(fd);
+            if (r) { printf("%s: no tags (%d)\n", argv[i], r); continue; }
+            printf("%s: [%s] title=%s | artist=%s | album=%s | albumartist=%s | genre=%s | "
+                   "composer=%s | year=%s(%d) | track=%s(%d) | disc=%s(%d) | %lu ms %d kb/s %lu Hz | "
+                   "rg track=%ld album=%ld | art type=%d flags=%d pos=%ld size=%d\n",
+                   argv[i], t.codec, t.title, t.artist, t.album, t.albumartist, t.genre,
+                   t.composer, t.year, t.year_num, t.track, t.tracknum, t.disc, t.discnum,
+                   t.length_ms, t.bitrate, t.frequency, t.track_gain, t.album_gain,
+                   t.art_type, t.art_flags, t.art_pos, t.art_size);
+        }
+        return 0;
+    }
     while ((opt = getopt(argc, argv, "e:p:x:t:r:v:s:o:F:")) != -1) {
         switch (opt) {
         case 'e': {

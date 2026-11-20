@@ -1,7 +1,6 @@
 package llm.slop.slopbox.ui.db
 
 import android.content.Context
-import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
@@ -16,6 +15,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import llm.slop.slopbox.RockboxTagFile
 import llm.slop.slopbox.ui.MusicTree
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -49,8 +49,9 @@ class Track(
  * The tag database, after Rockbox's: built by scanning the music folder
  * ("Initialize Now"), refreshed incrementally ("Update Now"), kept in a file.
  *
- * Tags come from Android's MediaMetadataRetriever for now; Rockbox's own
- * metadata parser (already in the engine) would be the faithful source.
+ * Tags come from Rockbox's own metadata parser (Engine.readTags), the same
+ * one playback uses. A database built before that switch is re-read by
+ * "Initialize Now".
  */
 object TagDb {
     private const val FILE = "tagdb.bin"
@@ -151,35 +152,23 @@ object TagDb {
         return out
     }
 
+    /** Tags via Rockbox's own parser (the same one playback uses). */
     private fun readTags(
         ctx: Context, tree: Uri, e: Child, dirId: String, dirName: String, path: String, commit: Int,
     ): Track {
-        val r = MediaMetadataRetriever()
-        fun k(key: Int) = runCatching { r.extractMetadata(key) }.getOrNull()?.trim().orEmpty()
-        fun lead(s: String) = s.takeWhile { it.isDigit() }.toIntOrNull() ?: 0
-        return try {
-            r.setDataSource(ctx, MusicTree.docUri(tree, e.id))
-            Track(
-                id = e.id, dir = dirId, dirName = dirName, path = path,
-                title = k(MediaMetadataRetriever.METADATA_KEY_TITLE),
-                artist = k(MediaMetadataRetriever.METADATA_KEY_ARTIST),
-                album = k(MediaMetadataRetriever.METADATA_KEY_ALBUM),
-                albumArtist = k(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST),
-                genre = k(MediaMetadataRetriever.METADATA_KEY_GENRE),
-                composer = k(MediaMetadataRetriever.METADATA_KEY_COMPOSER),
-                year = lead(k(MediaMetadataRetriever.METADATA_KEY_YEAR).ifEmpty { k(MediaMetadataRetriever.METADATA_KEY_DATE) }),
-                trackNum = lead(k(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)),
-                discNum = lead(k(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)),
-                lengthMs = k(MediaMetadataRetriever.METADATA_KEY_DURATION).toLongOrNull() ?: 0,
-                bitrate = ((k(MediaMetadataRetriever.METADATA_KEY_BITRATE).toLongOrNull() ?: 0) / 1000).toInt(),
-                modified = e.modified, size = e.size, commitId = commit,
-            )
-        } catch (ex: Exception) {
-            // Untagged (or a format Android can't read): still listed, by file name.
-            Track(e.id, dirId, dirName, path, "", "", "", "", "", "", 0, 0, 0, 0, 0, e.modified, e.size, commit)
-        } finally {
-            r.release()
-        }
+        val t = RockboxTagFile.read(ctx, MusicTree.docUri(tree, e.id), name = e.name)?.tags
+            // Untagged or unreadable: still listed, by file name (as Rockbox does).
+            ?: return Track(e.id, dirId, dirName, path, "", "", "", "", "", "", 0, 0, 0, 0, 0, e.modified, e.size, commit)
+        return Track(
+            id = e.id, dir = dirId, dirName = dirName, path = path,
+            title = t.title.trim(), artist = t.artist.trim(), album = t.album.trim(),
+            albumArtist = t.albumArtist.trim(), genre = t.genre.trim(), composer = t.composer.trim(),
+            // Rockbox uses -1 for "none"; the database uses 0.
+            year = t.yearNum.coerceAtLeast(0), trackNum = t.trackNum.coerceAtLeast(0),
+            discNum = t.discNum.coerceAtLeast(0),
+            lengthMs = t.lengthMs, bitrate = t.bitrate,
+            modified = e.modified, size = e.size, commitId = commit,
+        )
     }
 
     private fun write(f: File) {

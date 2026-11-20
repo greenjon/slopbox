@@ -316,3 +316,48 @@ Java_llm_slop_slopbox_Engine_nativeTrackSerial(JNIEnv *env, jobject thiz)
 {
     return atomic_load(&track_serial);
 }
+
+/* Tags via Rockbox's parser, without playing. Doesn't take ownership of fd.
+ * Returns null if the file can't be parsed; otherwise strings in the order of
+ * Engine.RockboxTags. */
+JNIEXPORT jobjectArray JNICALL
+Java_llm_slop_slopbox_Engine_nativeReadTags(JNIEnv *env, jobject thiz,
+                                            jint fd, jstring jname)
+{
+    struct sb_tags t;
+    const char *name = (*env)->GetStringUTFChars(env, jname, NULL);
+    int r = sb_read_tags(fd, name, &t);
+    (*env)->ReleaseStringUTFChars(env, jname, name);
+    if (r != 0)
+        return NULL;
+    char num[14][32];
+    snprintf(num[0], 32, "%d", t.tracknum);
+    snprintf(num[1], 32, "%d", t.discnum);
+    snprintf(num[2], 32, "%d", t.year_num);
+    snprintf(num[3], 32, "%lu", t.length_ms);
+    snprintf(num[4], 32, "%lu", t.frequency);
+    snprintf(num[5], 32, "%d", t.bitrate);
+    snprintf(num[6], 32, "%ld", t.track_gain);
+    snprintf(num[7], 32, "%ld", t.album_gain);
+    snprintf(num[8], 32, "%ld", t.track_peak);
+    snprintf(num[9], 32, "%ld", t.album_peak);
+    snprintf(num[10], 32, "%d", t.art_type);
+    snprintf(num[11], 32, "%d", t.art_flags);
+    snprintf(num[12], 32, "%ld", t.art_pos);
+    snprintf(num[13], 32, "%d", t.art_size);
+    const char *strs[] = {
+        t.title, t.artist, t.album, t.albumartist, t.genre, t.composer, t.comment,
+        t.grouping, t.disc, t.track, t.year, t.mb_track_id, t.codec,
+        num[0], num[1], num[2], num[3], num[4], num[5], num[6], num[7], num[8],
+        num[9], num[10], num[11], num[12], num[13],
+    };
+    int n = sizeof(strs) / sizeof(strs[0]);
+    jclass str = (*env)->FindClass(env, "java/lang/String");
+    jobjectArray a = (*env)->NewObjectArray(env, n, str, NULL);
+    for (int i = 0; i < n; i++) {
+        jstring js = (*env)->NewStringUTF(env, strs[i]);
+        (*env)->SetObjectArrayElement(env, a, i, js);
+        (*env)->DeleteLocalRef(env, js);
+    }
+    return a;
+}

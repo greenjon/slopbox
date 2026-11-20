@@ -457,8 +457,8 @@ static void copy_str(char *dst, size_t n, const char *src)
     snprintf(dst, n, "%s", src ? src : "");
 }
 
-int sb_play_fd(int fd, const char *name, sb_pcm_sink sink, void *user,
-               struct sb_track_info *info_out)
+int sb_play_fd(int fd, const char *name, long start_ms, sb_pcm_sink sink,
+               void *user, struct sb_track_info *info_out)
 {
     if (!dsp_ready)
         return -1;
@@ -489,6 +489,12 @@ int sb_play_fd(int fd, const char *name, sb_pcm_sink sink, void *user,
     sink_stopped = false;
     atomic_store(&codec_action, CODEC_ACTION_NULL);
     atomic_store(&elapsed_ms, 0);
+    if (start_ms > 0) {
+        /* The codec sees this on its first get_command, before decoding. */
+        atomic_store(&codec_action_param, start_ms);
+        atomic_store(&codec_action, CODEC_ACTION_SEEK_TIME);
+        atomic_store(&elapsed_ms, start_ms);
+    }
 
     ci.filesize = ffilesize(fd);
     ci.curpos = 0;
@@ -538,13 +544,13 @@ int sb_play_fd(int fd, const char *name, sb_pcm_sink sink, void *user,
     return ret;
 }
 
-int sb_play_file(const char *path, sb_pcm_sink sink, void *user,
-                 struct sb_track_info *info_out)
+int sb_play_file(const char *path, long start_ms, sb_pcm_sink sink,
+                 void *user, struct sb_track_info *info_out)
 {
     int fd = open(path, O_RDONLY);
     if (fd < 0)
         return -1;
-    int ret = sb_play_fd(fd, path, sink, user, info_out);
+    int ret = sb_play_fd(fd, path, start_ms, sink, user, info_out);
     close(fd);
     return ret;
 }

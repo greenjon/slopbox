@@ -1,9 +1,9 @@
 package llm.slop.slopbox
 
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,11 +35,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.delay
 import java.io.File
 
-/** Spike UI: open one file, play it through Rockbox's codecs and DSP. */
+/** Spike UI. Playback lives in [PlaybackService]; this screen is a controller. */
 class MainActivity : ComponentActivity() {
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+    private var controller by mutableStateOf<MediaController?>(null)
+    /** Files to play once the controller connects. */
+    private var pending: List<Uri>? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handleIntent(intent)
@@ -49,9 +63,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onDestroy() {
-        if (isFinishing) Engine.stop()
-        super.onDestroy()
+    override fun onStart() {
+        super.onStart()
+        val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
+        val future = MediaController.Builder(this, token).buildAsync()
+        controllerFuture = future
+        future.addListener({
+            controller = future.get()
+            pending?.let { playUris(it) }
+            pending = null
+        }, MoreExecutors.directExecutor())
+    }
+
+    override fun onStop() {
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
+        controller = null
+        super.onStop()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -59,60 +87,83 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
-    /** "Open with" (content URI), or in debug builds a raw path for adb tests:
-     *  adb shell am start -n <pkg>/.MainActivity --es path /data/.../t.flac */
+    /** "Open with" (content URI), or in debug builds raw paths for adb tests:
+     *  adb shell am start -n llm.slop.slopbox/.MainActivity --es path /data/.../a.flac,/data/.../b.mp3 */
     private fun handleIntent(intent: Intent?) {
-        val debugPath = if (BuildConfig.DEBUG) intent?.getStringExtra("path") else null
-        when {
-            debugPath != null -> {
-                val pfd = ParcelFileDescriptor.open(File(debugPath), ParcelFileDescriptor.MODE_READ_ONLY)
-                Engine.play(pfd.detachFd(), File(debugPath).name)
-            }
-            intent?.action == Intent.ACTION_VIEW && intent.data != null -> playUri(intent.data!!)
+        val debugPaths = if (BuildConfig.DEBUG) intent?.getStringExtra("path") else null
+        val uris = when {
+            debugPaths != null -> debugPaths.split(',').map { Uri.fromFile(File(it)) }
+            intent?.action == Intent.ACTION_VIEW && intent.data != null -> listOf(intent.data!!)
+            else -> return
         }
+        if (controller != null) playUris(uris) else pending = uris
     }
 
-    private fun playUri(uri: Uri): String {
-        val name = displayName(uri)
-        val pfd = contentResolver.openFileDescriptor(uri, "r") ?: return "Can't open $name"
-        return if (Engine.play(pfd.detachFd(), name)) name else "Engine refused $name"
+    private fun playUris(uris: List<Uri>) {
+        val c = controller ?: return
+        val items = uris.map { uri ->
+            MediaItem.Builder()
+                .setUri(uri)
+                .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(uri).build())
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(displayName(uri)).build())
+                .build()
+        }
+        c.setMediaItems(items)
+        c.prepare()
+        c.play()
     }
 
     private fun displayName(uri: Uri): String =
-        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        if (uri.scheme == "file") File(uri.path!!).name
+        else contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
             ?: uri.lastPathSegment ?: "unknown"
 
     @Composable
     private fun Player() {
-        var status by remember { mutableStateOf("Open a file to start.") }
-        var info by remember { mutableStateOf<Engine.TrackInfo?>(null) }
-        var elapsed by remember { mutableLongStateOf(0L) }
-        var playing by remember { mutableStateOf(false) }
-        var paused by remember { mutableStateOf(false) }
+        val c = controller
+        var title by remember { mutableStateOf("") }
+        var artist by remember { mutableStateOf("") }
+        var details by remember { mutableStateOf("") }
+        var status by remember { mutableStateOf("Open files to start.") }
+        var position by remember { mutableLongStateOf(0L) }
+        var duration by remember { mutableLongStateOf(0L) }
+        var queue by remember { mutableStateOf("") }
+        var isPlaying by remember { mutableStateOf(false) }
+        var itemCount by remember { mutableIntStateOf(0) }
         var bassBoost by remember { mutableStateOf(false) }
         var crossfeed by remember { mutableStateOf(false) }
         var tempo by remember { mutableFloatStateOf(1f) }
 
-        val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            if (uri == null) return@rememberLauncherForActivityResult
-            val result = playUri(uri)
-            if (!Engine.isPlaying) status = result
-            paused = false
+        val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            if (uris.isEmpty()) return@rememberLauncherForActivityResult
+            // Keep access after this screen goes away; the service plays them later.
+            uris.forEach {
+                runCatching {
+                    contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+            playUris(uris)
         }
 
-        LaunchedEffect(Unit) {
-            while (true) {
-                playing = Engine.isPlaying
-                elapsed = Engine.elapsedMs
-                val i = Engine.trackInfo()
-                info = if (i.codec.isNotEmpty()) i else null
+        LaunchedEffect(c) {
+            while (c != null) {
+                isPlaying = c.isPlaying
+                itemCount = c.mediaItemCount
+                position = c.currentPosition
+                duration = c.duration.takeIf { it != C.TIME_UNSET } ?: 0L
+                val md = c.mediaMetadata
+                title = md.title?.toString() ?: ""
+                artist = md.artist?.toString() ?: ""
+                queue = if (itemCount > 0) "Track ${c.currentMediaItemIndex + 1} of $itemCount" else ""
+                val info = Engine.trackInfo()
+                details = if (info.codec.isNotEmpty()) "${info.codec}, ${info.frequency} Hz, ${info.bitrate} kb/s" else ""
                 status = when {
-                    !playing && Engine.lastResult != 0 -> "Engine error ${Engine.lastResult}"
-                    playing && paused -> "Paused"
-                    playing -> "Playing"
-                    info != null -> "Stopped"
-                    else -> status
+                    itemCount == 0 -> "Open files to start."
+                    c.playbackState == Player.STATE_ENDED -> "End of queue"
+                    isPlaying -> "Playing"
+                    c.playWhenReady -> "Waiting"
+                    else -> "Paused"
                 }
                 delay(250)
             }
@@ -124,24 +175,24 @@ class MainActivity : ComponentActivity() {
         ) {
             Text("SlopBox", style = MaterialTheme.typography.headlineMedium)
             Text(status)
-            info?.let {
-                Text("${it.artist.ifEmpty { "?" }} - ${it.title.ifEmpty { "?" }}")
-                Text("${it.codec}, ${it.frequency} Hz, ${it.bitrate} kb/s")
-                Text("${fmt(elapsed)} / ${fmt(it.lengthMs)}")
-                if (it.lengthMs > 0) {
+            if (itemCount > 0) {
+                Text("${artist.ifEmpty { "?" }} - ${title.ifEmpty { "?" }}")
+                if (details.isNotEmpty()) Text(details)
+                Text("${fmt(position)} / ${fmt(duration)}    $queue")
+                if (duration > 0) {
                     Slider(
-                        value = (elapsed.toFloat() / it.lengthMs).coerceIn(0f, 1f),
-                        onValueChange = { f -> Engine.seekMs((f * it.lengthMs).toLong()) },
+                        value = (position.toFloat() / duration).coerceIn(0f, 1f),
+                        onValueChange = { f -> c?.seekTo((f * duration).toLong()) },
                     )
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { picker.launch(arrayOf("audio/*")) }) { Text("Open") }
-                Button(enabled = playing, onClick = {
-                    paused = !paused
-                    Engine.setPaused(paused)
-                }) { Text(if (paused) "Resume" else "Pause") }
-                Button(enabled = playing, onClick = { Engine.stop() }) { Text("Stop") }
+                Button(enabled = c != null, onClick = { picker.launch(arrayOf("audio/*")) }) { Text("Open") }
+                Button(enabled = itemCount > 0, onClick = { c?.seekToPrevious() }) { Text("Prev") }
+                Button(enabled = itemCount > 0, onClick = {
+                    if (c?.isPlaying == true) c.pause() else c?.play()
+                }) { Text(if (isPlaying) "Pause" else "Play") }
+                Button(enabled = itemCount > 0, onClick = { c?.seekToNext() }) { Text("Next") }
             }
             Toggle("Bass boost (EQ low shelf +6 dB at 120 Hz)", bassBoost) {
                 bassBoost = it

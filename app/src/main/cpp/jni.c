@@ -29,6 +29,7 @@ static struct sb_track_info info;
 
 struct play_job {
     int fd;
+    long start_ms;
     char name[512];
 };
 
@@ -42,7 +43,7 @@ static void *player_main(void *arg)
     struct play_job *job = arg;
     int ret = -10;
     if (out)
-        ret = sb_play_fd(job->fd, job->name, sink, out, &info);
+        ret = sb_play_fd(job->fd, job->name, job->start_ms, sink, out, &info);
     sb_aaudio_finish(out);
     LOG("finished %s: %d", job->name, ret);
     close(job->fd);
@@ -75,20 +76,24 @@ Java_llm_slop_slopbox_Engine_nativeInit(JNIEnv *env, jobject thiz)
 
 JNIEXPORT jboolean JNICALL
 Java_llm_slop_slopbox_Engine_nativePlayFd(JNIEnv *env, jobject thiz,
-                                                   jint fd, jstring jname)
+                                                   jint fd, jstring jname,
+                                                   jlong start_ms, jboolean start_paused)
 {
     pthread_mutex_lock(&player_lock);
     stop_locked();
 
     struct play_job *job = calloc(1, sizeof(*job));
     job->fd = fd;
+    job->start_ms = (long)start_ms;
     const char *name = (*env)->GetStringUTFChars(env, jname, NULL);
     strncpy(job->name, name, sizeof(job->name) - 1);
     (*env)->ReleaseStringUTFChars(env, jname, name);
 
     memset(&info, 0, sizeof(info));
     out = sb_aaudio_open((int)sb_output_rate());
-    atomic_store(&paused, false);
+    atomic_store(&paused, start_paused);
+    if (out && start_paused)
+        sb_aaudio_set_paused(out, true);
     atomic_store(&playing, true);
     atomic_store(&last_result, 0);
     bool ok = pthread_create(&player_thread, NULL, player_main, job) == 0;
@@ -207,4 +212,10 @@ Java_llm_slop_slopbox_Engine_nativeSetPitch(JNIEnv *env, jobject thiz,
                                                     jdouble r)
 {
     sb_set_pitch(r);
+}
+
+JNIEXPORT void JNICALL
+Java_llm_slop_slopbox_Engine_nativeSetVolumeDb(JNIEnv *env, jobject thiz, jint db)
+{
+    sb_set_volume_db(db);
 }

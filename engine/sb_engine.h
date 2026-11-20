@@ -32,14 +32,14 @@ struct sb_track_info {
 void sb_engine_init(const char *codec_path_fmt);
 unsigned sb_output_rate(void);
 
-/* Decode one file to the sink. Blocks until the end, sb_stop() or an error.
- * Returns 0 on success. Only one file plays at a time. */
-int sb_play_file(const char *path, sb_pcm_sink sink, void *user,
-                 struct sb_track_info *info_out);
+/* Decode one file to the sink, starting start_ms into it. Blocks until the
+ * end, sb_stop() or an error. Returns 0 on success. One file at a time. */
+int sb_play_file(const char *path, long start_ms, sb_pcm_sink sink,
+                 void *user, struct sb_track_info *info_out);
 /* Same, from an already-open file descriptor (Android content URIs). The
  * engine does not close fd. name is used for format detection by extension. */
-int sb_play_fd(int fd, const char *name, sb_pcm_sink sink, void *user,
-               struct sb_track_info *info_out);
+int sb_play_fd(int fd, const char *name, long start_ms, sb_pcm_sink sink,
+               void *user, struct sb_track_info *info_out);
 
 /* These may be called from any thread while a file plays. */
 void sb_stop(void);

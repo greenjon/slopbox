@@ -11,10 +11,13 @@ Much of it is written with AI help, hence the name.
 
 ## Status
 
-Early spike. Rockbox's codecs and DSP build for Android, and a one-screen app
-plays a file through them (EQ, crossfeed, tempo). Tested on a Unihertz Jelly
-Star (Android 13, arm64): FLAC, MP3 and Ogg play in real time; pause, seek,
-stop, effects and 2x tempo work.
+Early. Rockbox's codecs and DSP build for Android, and a one-screen app plays
+through them (EQ, crossfeed, tempo). Playback runs in a Media3 session
+service: it keeps playing with the screen off, shows a media notification,
+answers headset/Bluetooth/lock-screen buttons, handles audio focus and pauses
+when headphones are unplugged. Open several files to make a queue.
+
+Tested on a Unihertz Jelly Star (Android 13, arm64).
 
 ## Layout
 

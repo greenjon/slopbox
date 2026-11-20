@@ -18,7 +18,8 @@ object Engine {
     )
 
     /** Takes ownership of [fd]; [name] is used to detect the format by extension. */
-    fun play(fd: Int, name: String): Boolean = nativePlayFd(fd, name)
+    fun play(fd: Int, name: String, startMs: Long = 0, paused: Boolean = false): Boolean =
+        nativePlayFd(fd, name, startMs, paused)
     fun stop() = nativeStop()
     fun setPaused(paused: Boolean) = nativeSetPaused(paused)
     val isPlaying: Boolean get() = nativeIsPlaying()
@@ -40,9 +41,12 @@ object Engine {
     fun setCrossfeed(type: Int) = nativeSetCrossfeed(type)
     fun setTempo(tempo: Double) = nativeSetTempo(tempo)
     fun setPitch(rate: Double) = nativeSetPitch(rate)
+    /** Lower the volume while another app briefly talks over us (navigation etc.). */
+    fun setDuck(duck: Boolean) = nativeSetVolumeDb(if (duck) DUCK_DB else 0)
+    private const val DUCK_DB = -12
 
     private external fun nativeInit()
-    private external fun nativePlayFd(fd: Int, name: String): Boolean
+    private external fun nativePlayFd(fd: Int, name: String, startMs: Long, paused: Boolean): Boolean
     private external fun nativeStop()
     private external fun nativeSetPaused(paused: Boolean)
     private external fun nativeIsPlaying(): Boolean
@@ -56,4 +60,5 @@ object Engine {
     private external fun nativeSetCrossfeed(type: Int)
     private external fun nativeSetTempo(tempo: Double)
     private external fun nativeSetPitch(rate: Double)
+    private external fun nativeSetVolumeDb(db: Int)
 }

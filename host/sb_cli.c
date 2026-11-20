@@ -10,7 +10,7 @@
  *     -t TEMPO                 timestretch, 1.0 = normal
  *     -r RATE                  pitch/speed, 1.0 = normal
  *     -v DB                    volume attenuation, whole dB (<= 0)
- *     -s MS                    seek to MS before the first sample
+ *     -s MS                    start MS into the file
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -25,7 +25,7 @@
 
 static FILE *out;
 static uint32_t frames_out;
-static long seek_ms = -1;
+static long start_ms = 0;
 
 static void put_le32(uint8_t *p, uint32_t v)
 { p[0] = v; p[1] = v >> 8; p[2] = v >> 16; p[3] = v >> 24; }
@@ -49,10 +49,6 @@ static void write_header(uint32_t frames)
 static bool sink(void *user, const int16_t *pcm, int frames)
 {
     (void)user;
-    if (seek_ms >= 0) {           /* first buffer: ask for the seek now */
-        sb_seek_ms(seek_ms);
-        seek_ms = -1;
-    }
     fwrite(pcm, 4, frames, out);  /* host is little-endian */
     frames_out += frames;
     return true;
@@ -79,7 +75,7 @@ int main(int argc, char **argv)
         case 't': sb_set_tempo(atof(optarg)); break;
         case 'r': sb_set_pitch(atof(optarg)); break;
         case 'v': sb_set_volume_db(atoi(optarg)); break;
-        case 's': seek_ms = atol(optarg); break;
+        case 's': start_ms = atol(optarg); break;
         default: return 2;
         }
     }
@@ -92,7 +88,7 @@ int main(int argc, char **argv)
     write_header(0);
 
     struct sb_track_info info;
-    int ret = sb_play_file(argv[optind], sink, NULL, &info);
+    int ret = sb_play_file(argv[optind], start_ms, sink, NULL, &info);
     write_header(frames_out);
     fclose(out);
     fprintf(stderr, "%s - %s [%s, %lu ms] -> %u frames, ret %d\n",

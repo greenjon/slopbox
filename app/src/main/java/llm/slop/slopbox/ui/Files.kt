@@ -33,11 +33,19 @@ import llm.slop.slopbox.RockboxTagFile
 import java.io.File
 
 /** One entry in a folder of the music tree. */
-data class Doc(val id: String, val name: String, val isDir: Boolean) {
+data class Doc(
+    val id: String,
+    val name: String,
+    val isDir: Boolean,
+    /** Last modified (ms), for "Sort ... By Date". */
+    val modified: Long = 0,
+    /** The provider says it's audio (beyond what the extension says). */
+    val audioMime: Boolean = false,
+) {
     /** A playlist file (.m3u/.m3u8): listed in the browser, not played as a track. */
     val isPlaylist: Boolean get() = !isDir && llm.slop.slopbox.PlaylistFiles.isPlaylist(name)
-    /** A track. */
-    val isTrack: Boolean get() = !isDir && !isPlaylist
+    /** A track the codecs can play. */
+    val isTrack: Boolean get() = !isDir && !isPlaylist && (audioMime || MusicTree.isAudio(name, ""))
 }
 
 /**
@@ -60,29 +68,35 @@ object MusicTree {
 
     fun docUri(tree: Uri, id: String): Uri = DocumentsContract.buildDocumentUriUsingTree(tree, id)
 
-    /** Folders first, then playable files; both by name. Hidden files left out. */
-    suspend fun list(ctx: Context, tree: Uri, dirId: String): List<Doc> = withContext(Dispatchers.IO) {
+    /**
+     * Rockbox ft_load(): everything in a folder, sorted by the File View
+     * settings (folders first). Dot files are left out unless [hidden]
+     * (Rockbox shows them only with Show Files: All). Callers filter for
+     * what they want (tracks, or the browser's Show Files).
+     */
+    suspend fun list(ctx: Context, tree: Uri, dirId: String, hidden: Boolean = false): List<Doc> = withContext(Dispatchers.IO) {
         val out = mutableListOf<Doc>()
         val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, dirId)
         val cols = arrayOf(
             DocumentsContract.Document.COLUMN_DOCUMENT_ID,
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
             DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
         )
         try {
             ctx.contentResolver.query(children, cols, null, null, null)?.use { c ->
                 while (c.moveToNext()) {
                     val name = c.getString(1) ?: continue
-                    if (name.startsWith(".")) continue
+                    if (!hidden && name.startsWith(".")) continue
                     val mime = c.getString(2) ?: ""
                     val isDir = mime == DocumentsContract.Document.MIME_TYPE_DIR
-                    if (isDir || isAudio(name, mime) || llm.slop.slopbox.PlaylistFiles.isPlaylist(name)) out += Doc(c.getString(0), name, isDir)
+                    out += Doc(c.getString(0), name, isDir, c.getLong(3), !isDir && mime.startsWith("audio/"))
                 }
             }
         } catch (e: Exception) {
             Log.w("MusicTree", "list $dirId failed", e)
         }
-        out.sortWith(compareBy<Doc>({ !it.isDir }, { it.name.lowercase() }))
+        out.sortWith(FileView.comparator(llm.slop.slopbox.SettingsStore.get(ctx)))
         out
     }
 

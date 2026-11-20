@@ -61,6 +61,15 @@ Anything new goes here in the same change that introduces it.
 - **`.cfg` header.** Saved files say they were created by SlopBox, and give
   the Rockbox revision the settings were taken from.
 
+- **File View.** Sorting, Show Files, Show Filename Extensions, Show Path,
+  Follow Playlist and Always Remember Last Folder work as in Rockbox.
+  "Supported" files are the ones SlopBox can do something with: audio,
+  playlists, `.cfg` (loads the settings), `.cue` (shows its tracks), `.bmark`
+  (lists its bookmarks) and `.lrc`/`.lrc8`/`.snc` (open the LRC Player).
+  Other files, such as images and text, do nothing when opened, since their
+  Rockbox viewer plugins aren't ported. Sort By Type orders playlists, then
+  audio, then the other known types, then unknown ones.
+
 ## Playback settings
 
 - **Shuffle.** Tracks added while shuffled are appended to the remembered

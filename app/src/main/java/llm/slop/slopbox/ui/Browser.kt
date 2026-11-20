@@ -54,6 +54,17 @@ class BrowserState {
     /** Bumped after a file operation so the shown folder is listed again. */
     var reload by mutableIntStateOf(0)
 
+    /**
+     * Rockbox global_status.browse_last_folder: kept across restarts only
+     * with "Always remember last folder" (keep directory).
+     */
+    fun remember(ctx: Context) {
+        val st = llm.slop.slopbox.SettingsStore.get(ctx)
+        val prefs = ctx.getSharedPreferences("global_status", Context.MODE_PRIVATE)
+        if (st.int("keep directory") != 0) prefs.edit().putString("browse_last_folder", path.lastOrNull()?.id).apply()
+        else prefs.edit().remove("browse_last_folder").apply()
+    }
+
     fun open(ctx: Context, tree: Uri?) {
         this.tree = tree
         path.clear()
@@ -62,10 +73,14 @@ class BrowserState {
         if (tree != null) {
             val id = MusicTree.rootId(tree)
             path += Doc(id, rootName(ctx, tree, id), isDir = true)
-            // Rockbox "Start Directory" (Set As... › Start Directory).
-            val start = llm.slop.slopbox.SettingsStore.get(ctx).let { st ->
-                st.catalog.byCfg["start directory"]?.let { st.text(it) } }
-            if (start != null && start.trim('/').isNotEmpty()) {
+            // Rockbox root_menu browser(): the last folder if remembered, else
+            // "Start Directory" (Set As... › Start Directory).
+            val st = llm.slop.slopbox.SettingsStore.get(ctx)
+            val last = ctx.getSharedPreferences("global_status", Context.MODE_PRIVATE).getString("browse_last_folder", null)
+                ?.takeIf { st.int("keep directory") != 0 }
+            val start = st.catalog.byCfg["start directory"]?.let { st.text(it) }
+            if (last != null && last != id) descend(last, includeLast = true)
+            else if (start != null && start.trim('/').isNotEmpty()) {
                 descend(llm.slop.slopbox.PlaylistFiles.docIdOf(tree, start.trimEnd('/')), includeLast = true)
             }
         }
@@ -115,11 +130,21 @@ private sealed interface BrowserMenu {
     data object ForFolder : BrowserMenu
 }
 
+/** A track for the browser to open at (Rockbox "Follow Playlist"). */
+object FollowPlaylist {
+    var pending: String? = null
+}
+
 @Composable
 fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, pickRoot: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val tree = state.tree
+    LaunchedEffect(Unit) {
+        val id = FollowPlaylist.pending
+        FollowPlaylist.pending = null
+        if (id != null && tree != null) state.reveal(ctx, tree, id)
+    }
     var menu by remember { mutableStateOf<BrowserMenu?>(null) }
 
     if (tree == null || state.path.isEmpty()) {
@@ -133,7 +158,22 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
 
     val dir = state.path.last()
     var entries by remember(dir.id) { mutableStateOf<List<Doc>?>(null) }
-    LaunchedEffect(tree, dir.id, state.reload) { entries = MusicTree.list(ctx, tree, dir.id) }
+    val fv = remember { llm.slop.slopbox.SettingsStore.get(ctx) }
+    var fvRev by remember { mutableStateOf(0) }
+    DisposableEffect(fv) {
+        val l: () -> Unit = { fvRev++ }
+        fv.addListener(l)
+        onDispose { fv.removeListener(l) }
+    }
+    val showFiles = fv.int("show files")
+    LaunchedEffect(tree, dir.id, state.reload, fvRev) {
+        // Show Files (Rockbox's dirfilter); dot files only with All.
+        entries = MusicTree.list(ctx, tree, dir.id, hidden = showFiles == 0).filter { FileView.visible(it, showFiles) }
+        state.remember(ctx)
+    }
+    var viewing by remember { mutableStateOf<Doc?>(null) }
+    BackHandler(enabled = viewing != null) { viewing = null }
+    viewing?.let { v -> FileViewer(tree, v, nav) { viewing = null }; return }
 
     BackHandler(enabled = menu == null && state.path.size > 1) { state.path.removeAt(state.path.lastIndex) }
     BackHandler(enabled = menu != null) { menu = null }
@@ -210,7 +250,7 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
 
     Column(Modifier.fillMaxSize()) {
         TitleBar(
-            dir.name,
+            FileView.title(state.path, fv),
             onBack = { if (state.path.size > 1) state.path.removeAt(state.path.lastIndex) else nav.pop() },
         ) {
             BarButton(G.ListC) { menu = BrowserMenu.ForFolder }
@@ -219,13 +259,20 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
         val list = entries
         when {
             list == null -> ListNote("Loading…")
-            list.isEmpty() -> ListNote("No music in this folder.")
+            list.isEmpty() -> ListNote(fv.catalog.str("LANG_NO_FILES"))
             else -> LazyColumn(Modifier.fillMaxSize(), state = listState) {
                 items(list, key = { it.id }) { e ->
                     val sel = state.cursor[dir.id]?.let { it == e.id } ?: (e.id == playingId)
                     RockRow(
-                        if (e.isDir) e.name else e.name.substringBeforeLast('.'),
-                        icon = if (e.isDir) G.TangoFolder else if (e.isPlaylist) G.ListC else G.TangoNote,
+                        FileView.displayName(e, fv),
+                        icon = when {
+                            fv.int("show icons") == 0 -> null
+                            e.isDir -> G.TangoFolder
+                            e.isPlaylist -> G.ListC
+                            e.isTrack -> G.TangoNote
+                            FileView.supported(e) -> G.Config
+                            else -> null
+                        },
                         selected = sel,
                         onLongClick = {
                             state.cursor[dir.id] = e.id
@@ -235,6 +282,9 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
                         state.cursor[dir.id] = e.id
                         if (e.isDir) {
                             state.path += e
+                        } else if (!e.isTrack && !e.isPlaylist) {
+                            // Rockbox ft_enter() for the other known types; unknown ones do nothing.
+                            viewing = e
                         } else {
                             val c = controller ?: return@RockRow
                             // Rockbox: playing a file plays its folder, starting there.
@@ -316,5 +366,70 @@ private fun BrowserMenuScreen(
         }
         RockRow(cat.str("LANG_CREATE_DIR"), icon = G.Cursor) { naming = true }
         RockRow("Change music folder", icon = G.TangoFolder, onClick = onChangeRoot)
+    }
+}
+
+/**
+ * Rockbox ft_enter() for SlopBox's other known types: a .cfg loads its
+ * settings, a .cue shows its tracks, .lrc/.lrc8/.snc open the LRC Player,
+ * a .bmark lists its bookmarks. Anything else does nothing, as in Rockbox
+ * when no viewer plugin knows the type.
+ */
+@Composable
+private fun FileViewer(tree: Uri, doc: Doc, nav: Nav, onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    val st = llm.slop.slopbox.SettingsStore.get(ctx)
+    val ext = doc.name.substringAfterLast('.', "").lowercase()
+    val bytes = remember(doc.id) {
+        runCatching { ctx.contentResolver.openInputStream(MusicTree.docUri(tree, doc.id))!!.use { it.readBytes() } }.getOrNull()
+    }
+    androidx.compose.runtime.LaunchedEffect(doc.id) {
+        when (ext) {
+            "cfg" -> {
+                if (bytes != null) {
+                    st.loadCfg(String(bytes, Charsets.UTF_8))
+                    android.widget.Toast.makeText(ctx, st.catalog.str("LANG_SETTINGS_LOADED"), android.widget.Toast.LENGTH_SHORT).show()
+                }
+                onBack()
+            }
+            "lrc", "lrc8", "snc" -> { onBack(); PluginList.running = "lrcplayer"; nav.push(Screen.PluginLrc) }
+            "cue", "bmark" -> {}
+            else -> onBack()
+        }
+    }
+    when (ext) {
+        // display_cuesheet_content(): title, performer, then each track.
+        "cue" -> {
+            val cue = bytes?.let { llm.slop.slopbox.Cuesheet.parse(it, 1, null) }
+            Column(Modifier.fillMaxSize()) {
+                TitleBar(doc.name, onBack = onBack)
+                if (cue == null) { ListNote(st.catalog.str("LANG_FAILED")); return@Column }
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item { RockRow("Title: ${cue.title}") {} }
+                    item { RockRow("Artist: ${cue.performer}") {} }
+                    items(cue.tracks.size) { i ->
+                        val t = cue.tracks[i]
+                        RockRow("%02d. %s - %s".format(i + 1, t.performer, t.title)) {}
+                    }
+                }
+            }
+        }
+        // bookmark_load(): the file's bookmarks; picking one plays it.
+        "bmark" -> {
+            val lines = bytes?.let { String(it, Charsets.UTF_8).lines().filter { l -> l.startsWith(">") || l.firstOrNull()?.isDigit() == true } }.orEmpty()
+            Column(Modifier.fillMaxSize()) {
+                TitleBar(doc.name.substringBeforeLast('.'), onBack = onBack)
+                if (lines.isEmpty()) ListNote(st.catalog.str("LANG_BOOKMARK_LOAD_EMPTY"))
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(lines) { l ->
+                        val bm = llm.slop.slopbox.Bookmarks.parse(l)
+                        RockRow(bm?.title ?: l, sub = bm?.let { "%d:%02d, %d".format(it.elapsedMs / 60000, (it.elapsedMs / 1000) % 60, it.index + 1) }) {
+                            llm.slop.slopbox.SlopPlayer.current?.playBookmark(l)
+                            onBack(); nav.toNowPlaying()
+                        }
+                    }
+                }
+            }
+        }
     }
 }

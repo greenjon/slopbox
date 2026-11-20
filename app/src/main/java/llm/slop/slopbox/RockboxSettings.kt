@@ -426,6 +426,8 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "context_wps", "Semitone pitch change", "Timestretch mode",
             "start directory", "playlist catalog directory", "gather runtime data",
             "qs top", "qs left", "qs right", "qs bottom", "shortcuts instead of quickscreen",
+            "sort case", "sort dirs", "sort files", "sort interpret number", "show files",
+            "show filename exts", "follow playlist", "show path in browser", "keep directory", "show icons",
         )
 
         @Volatile private var instance: SettingsStore? = null

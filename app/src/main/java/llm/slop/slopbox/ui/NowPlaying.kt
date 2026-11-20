@@ -417,7 +417,14 @@ private fun PopupMenu(nav: Nav) {
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PopupButton(G.Folder, null, Modifier.weight(1.2f)) { nav.toBrowser() }
+            // Rockbox "Follow Playlist" (browse_current): the file browser opens at the playing track.
+            PopupButton(G.Folder, null, Modifier.weight(1.2f)) {
+                val id = llm.slop.slopbox.SlopPlayer.current?.currentMediaItem?.mediaId
+                if (llm.slop.slopbox.SettingsStore.get(ctx).int("follow playlist") != 0 && id != null) {
+                    FollowPlaylist.pending = id
+                    nav.toFiles()
+                } else nav.toBrowser()
+            }
             // Rockbox "Use Shortcuts Menu Instead of Quick Screen".
             PopupButton(G.ListQ, "Q", Modifier.weight(1f)) {
                 nav.push(if (llm.slop.slopbox.SettingsStore.get(ctx).int("shortcuts instead of quickscreen") != 0)

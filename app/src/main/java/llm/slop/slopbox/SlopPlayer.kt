@@ -205,11 +205,25 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         if (setting("autoresume enable") == 0) return 0
         val resume = !autoSkip || when (setting("autoresume next track")) {
             1 -> true                   // Always
-            2 -> false                  // In custom directories only: no directory list yet
+            2 -> autoresumable(e)       // In the custom folders
             else -> false               // No
         }
         val at = if (resume) memory.resumePoint(keyOf(e)) else 0L
         return if (at > 0) (at - setting("resume rewind") * 1000L).coerceAtLeast(0) else 0
+    }
+
+    /**
+     * Rockbox playback.c autoresumable(): the track is inside one of the
+     * "autoresume next track paths" (colon-separated, whole folder names,
+     * case-insensitive).
+     */
+    private fun autoresumable(e: Entry): Boolean {
+        val path = e.uri?.let { PlaybackMemory.pathOf(it) } ?: return false
+        val paths = store.catalog.byCfg["autoresume next track paths"]?.let { store.text(it) } ?: return false
+        return paths.split(':').filter { it.isNotEmpty() }.any { p ->
+            path.length > p.length && path.startsWith(p, ignoreCase = true) &&
+                (path[p.length] == '/' || p.endsWith('/'))
+        }
     }
 
     private fun tagsOf(e: Entry): Engine.RockboxTags? {

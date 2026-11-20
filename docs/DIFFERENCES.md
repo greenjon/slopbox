@@ -55,8 +55,10 @@ Anything new goes here in the same change that introduces it.
   touchscreen keymap for this screen is a 3x3 grid instead.
 - **Not editable yet.** Custom-type settings other than the EQ
   bands, Maximum Volume Limit, the While Playing Screen items and the
-  Quick Screen items (e.g. touchscreen calibration, colours); string and
-  filename settings such as Automatic Resume's custom directories.
+  Quick Screen items (e.g. touchscreen calibration, colours).
+- **Automatic Resume custom folders.** "In custom directories only" opens a
+  port of Rockbox's db_folder_select plugin over the music folder, and the
+  list is matched as Rockbox's autoresumable() does.
 - **Browse actions.** Themes, fonts, skins and languages aren't available.
   Browse .cfg Files and Browse EQ Presets open Android's file picker. There is
   no bundled EQ preset folder.

@@ -209,7 +209,13 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
             return
         }
         stack += Page.Value(item.text, s.labels, { store.int(s) }, { v ->
+            val old = store.int(s)
             store.set(s, v)
+            // Rockbox autoresume_nexttrack_callback(): "Custom" opens the folder
+            // picker; if nothing is saved there, the old choice comes back.
+            if (s.cfg == "autoresume next track" && v == 2) {
+                stack += Page.FolderSel(cat.str("LANG_AUTORESUME"), "autoresume next track paths", s, old)
+            }
             // Rockbox sleeptimer_duration_cb(): a running timer restarts with the new length.
             if (s.cfg == "sleeptimer duration" && llm.slop.slopbox.PowerMgmt.sleepTimerSeconds > 0)
                 llm.slop.slopbox.PowerMgmt.setSleepTimer(v)
@@ -271,7 +277,8 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
 
     val page = stack.last()
     Column(Modifier.fillMaxSize()) {
-        TitleBar(if (page is Page.ContextItem) cat.str("LANG_ONPLAY_MENU_TITLE") else page.title, onBack = ::back)
+        // The folder picker has its own title bar (its back asks to save).
+        if (page !is Page.FolderSel) TitleBar(if (page is Page.ContextItem) cat.str("LANG_ONPLAY_MENU_TITLE") else page.title, onBack = ::back)
         when (page) {
             is Page.Menu -> LazyColumn(Modifier.fillMaxSize()) {
                 items(page.item.items) { item ->
@@ -305,7 +312,8 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                     items(page.labels) { (value, label) ->
                         RockRow(label.trim(), selected = value == current) {
                             page.onPick(value)
-                            back()
+                            // A pick may open another page (the folder picker); then drop just this one.
+                            if (stack.last() === page) back() else stack.remove(page)
                         }
                     }
                 }
@@ -320,6 +328,14 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                 }
             }
             is Page.GraphicalEq -> GraphicalEq(store)
+            is Page.FolderSel -> {
+                val target = cat.byCfg[page.cfg]
+                FolderSelect(page.title, target?.let { store.text(it) } ?: "") { result ->
+                    if (result != null && target != null) store.setText(target, result)
+                    else store.set(page.revert, page.revertTo)
+                    stack.removeAt(stack.lastIndex)
+                }
+            }
             is Page.SimpleEq -> LazyColumn(Modifier.fillMaxSize()) {
                 @Suppress("UNUSED_EXPRESSION") revision
                 items((0 until SettingsStore.EQ_BANDS).toList()) { band ->
@@ -390,6 +406,8 @@ private sealed interface Page {
     data class SimpleEq(override val title: String) : Page
     data class ContextItem(val item: Int) : Page { override val title get() = "" }
     data class GraphicalEq(override val title: String) : Page
+    /** db_folder_select for a path-list setting; [revert] restores [revertTo] if nothing is saved. */
+    data class FolderSel(override val title: String, val cfg: String, val revert: llm.slop.slopbox.RbSetting, val revertTo: Int) : Page
     data class AdvancedEq(override val title: String) : Page
 }
 

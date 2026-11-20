@@ -34,6 +34,7 @@ object PluginList {
     class Plugin(val name: String, val screen: Screen)
     val categories: List<Pair<String, List<Plugin>>> = listOf(
         "apps" to listOf(
+            Plugin("alarmclock", Screen.PluginAlarm),
             Plugin("lastfm_scrobbler", Screen.PluginScrobbler),
             Plugin("lrcplayer", Screen.PluginLrc),
             Plugin("random_folder_advance_config", Screen.PluginRfa),

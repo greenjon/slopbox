@@ -264,6 +264,9 @@ Anything new goes here in the same change that introduces it.
   are SlopBox's own. Its `#CLIENT` line names SlopBox and its version. View
   log shows the playback log as a plain list rather than through the
   separate lastfm_scrobbler_viewer plugin.
+- **Alarm Clock.** It counts down only while its screen is showing, so it
+  keeps the phone's screen on while it waits (a Rockbox player sits in the
+  plugin the same way). Touch uses the plugin library's 3x3 grid.
 
 ## Interface
 

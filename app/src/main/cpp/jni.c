@@ -43,6 +43,7 @@ static void *player_main(void *arg)
     int ret = -10;
     if (out)
         ret = sb_play_fd(job->fd, job->name, sink, out, &info);
+    sb_aaudio_finish(out);
     LOG("finished %s: %d", job->name, ret);
     close(job->fd);
     free(job);

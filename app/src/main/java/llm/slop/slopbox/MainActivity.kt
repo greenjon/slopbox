@@ -96,7 +96,8 @@ class MainActivity : ComponentActivity() {
 
         val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
-            status = playUri(uri)
+            val result = playUri(uri)
+            if (!Engine.isPlaying) status = result
             paused = false
         }
 
@@ -106,7 +107,13 @@ class MainActivity : ComponentActivity() {
                 elapsed = Engine.elapsedMs
                 val i = Engine.trackInfo()
                 info = if (i.codec.isNotEmpty()) i else null
-                if (!playing && Engine.lastResult != 0) status = "Engine error ${Engine.lastResult}"
+                status = when {
+                    !playing && Engine.lastResult != 0 -> "Engine error ${Engine.lastResult}"
+                    playing && paused -> "Paused"
+                    playing -> "Playing"
+                    info != null -> "Stopped"
+                    else -> status
+                }
                 delay(250)
             }
         }

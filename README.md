@@ -12,7 +12,9 @@ Much of it is written with AI help, hence the name.
 ## Status
 
 Early spike. Rockbox's codecs and DSP build for Android, and a one-screen app
-plays a file through them (EQ, crossfeed, tempo). Not yet run on a device.
+plays a file through them (EQ, crossfeed, tempo). Tested on a Unihertz Jelly
+Star (Android 13, arm64): FLAC, MP3 and Ogg play in real time; pause, seek,
+stop, effects and 2x tempo work.
 
 ## Layout
 

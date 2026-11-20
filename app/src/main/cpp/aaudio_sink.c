@@ -74,6 +74,13 @@ void sb_aaudio_close(struct sb_aaudio *a)
     free(a);
 }
 
+void sb_aaudio_finish(struct sb_aaudio *a)
+{
+    /* For output, requestStop plays out what was already written. */
+    if (a && a->stream)
+        AAudioStream_requestStop(a->stream);
+}
+
 void sb_aaudio_set_paused(struct sb_aaudio *a, bool paused)
 {
     pthread_mutex_lock(&a->lock);

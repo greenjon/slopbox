@@ -272,21 +272,27 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
 
         // Bottom row.
         var seeking by remember { mutableStateOf<G?>(null) }
+        var ffStep by remember { mutableStateOf(1000L) }
+        val settings = remember { llm.slop.slopbox.SettingsStore.get(ctx) }
         Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
             for ((g, dir) in listOf(G.Prev to -1, G.Next to 1)) {
                 SeekButton(
                     g, Modifier.weight(1f),
                     onTap = { if (dir < 0) controller?.seekToPrevious() else controller?.seekToNext() },
-                    onHold = { heldMs ->
+                    onHold = { _ ->
                         seeking = g
-                        // Rockbox-like acceleration: slow at first, faster the longer it's held.
-                        val step = when {
-                            heldMs < 2000 -> 1000L
-                            heldMs < 5000 -> 3000L
-                            else -> 10000L
-                        }
+                        // Rockbox gui/wps.c ffwd_rew(): start at "FF/RW Min Step", grow by
+                        // step >> (accel + 3) each repeat, capped at 3% of what's left.
                         val base = preview ?: s.positionMs
-                        preview = (base + dir * step).coerceIn(0, if (dur > 0) dur else Long.MAX_VALUE)
+                        if (preview == null) {
+                            ffStep = 1000L * settings.int("scan min step")
+                        } else {
+                            val room = if (dir > 0) (if (dur > 0) dur - base else Long.MAX_VALUE / 4) else base
+                            val maxStep = maxOf(room * 3 / 100, 500L)
+                            if (ffStep > maxStep) ffStep = maxStep
+                        }
+                        preview = (base + dir * ffStep).coerceIn(0, if (dur > 0) dur else Long.MAX_VALUE)
+                        ffStep += ffStep shr (settings.int("seek acceleration") + 3)
                     },
                     onRelease = {
                         seeking = null

@@ -24,6 +24,7 @@ import androidx.media3.common.util.UnstableApi
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import java.io.File
+import kotlinx.coroutines.launch
 
 /**
  * A Media3 [Player] backed by the native engine (Rockbox codecs + DSP), so the
@@ -38,6 +39,12 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     private class Entry(val uid: Long, val item: MediaItem) {
         var metadata: MediaMetadata? = null
         var durationMs: Long = C.TIME_UNSET
+        /** Rockbox tags, read on demand (Single Mode compares them). */
+        var tags: Engine.RockboxTags? = null
+        var tagsRead = false
+        val uri: Uri? get() = item.localConfiguration?.uri ?: item.requestMetadata.mediaUri
+        val dirId: String? get() = item.requestMetadata.extras?.getString(llm.slop.slopbox.ui.MusicTree.EXTRA_DIR)
+        val treeUri: String? get() = item.requestMetadata.extras?.getString(llm.slop.slopbox.ui.MusicTree.EXTRA_TREE)
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -78,6 +85,21 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     private val original = mutableListOf<Entry>()
     private var shuffled = false
 
+    private val memory = PlaybackMemory(context)
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.SupervisorJob())
+    private var folderJob: kotlinx.coroutines.Job? = null
+    /** Rockbox party mode: no pausing, stopping, seeking or skipping while music
+     *  plays (see docs/DIFFERENCES.md for resuming from a pause). */
+    private val partyLocked get() = setting("party mode") != 0 && engineActive && playWhenReady
+    /** Rockbox A-B repeat markers (ms in the current track), -1 when unset. */
+    private var abA = -1L
+    private var abB = -1L
+    /** Lets the service publish the A-B markers to controllers. */
+    var onAbChanged: ((Long, Long) -> Unit)? = null
+    private var lastSavedAt = 0L
+    /** Serial started by a manual change: its arrival isn't a natural track end. */
+    private var manualSerial = -1
+
     private val settingsListener: () -> Unit = {
         val want = setting("shuffle") != 0
         if (want != shuffled) applyShuffle(want, keepCurrentFirst = true)
@@ -88,6 +110,191 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
 
     init {
         store.addListener(settingsListener)
+        if (setting("play log") != 0) memory.startLog()
+        restorePlaylist()
+    }
+
+    // ---- Resume, Automatic Resume, logging -------------------------------------
+
+    /** Rockbox playlist resume at startup: the saved playlist, paused at its position
+     *  less "Rewind Before Resume"; "Start Screen: Resume Playback" also starts it. */
+    private fun restorePlaylist() {
+        val saved = memory.loadPlaylist() ?: return
+        entries.clear()
+        saved.items.forEach { entries += Entry(nextUid++, it) }
+        original.clear()
+        saved.original.mapNotNull { entries.getOrNull(it) }.forEach { original += it }
+        if (original.size != entries.size) { original.clear(); original += entries }
+        shuffled = saved.shuffled
+        Engine.setShuffle(shuffled)
+        index = saved.index.coerceIn(0, entries.size - 1)
+        heldPositionMs = (saved.positionMs - setting("resume rewind") * 1000L).coerceAtLeast(0)
+        playbackState = Player.STATE_READY
+        playWhenReady = false
+        if (setting("start in screen") == START_SCREEN_RESUME_PLAYBACK) {
+            handler.post { setPlaying(true); invalidateState() }
+        }
+    }
+
+    private fun savePlaylist() {
+        lastSavedAt = android.os.SystemClock.uptimeMillis()
+        if (entries.isEmpty()) { memory.clearPlaylist(); return }
+        memory.savePlaylist(
+            entries.map { it.item },
+            original.map { e -> entries.indexOfFirst { it === e } }.filter { it >= 0 },
+            shuffled, index, position,
+        )
+    }
+
+    private fun keyOf(e: Entry) = e.uri?.toString() ?: e.item.mediaId
+
+    /**
+     * Rockbox's track-finish event: the playback log entry, and the Automatic
+     * Resume point (none if never played or skipped in its first 3 s; 0 when it
+     * finished by itself) -- tagtree_track_finish_event().
+     */
+    private fun trackFinished(e: Entry?, elapsedMs: Long, autoSkip: Boolean) {
+        e ?: return
+        val length = e.durationMs.takeIf { it != C.TIME_UNSET } ?: 0L
+        if (setting("play log") != 0) e.uri?.let { memory.log(PlaybackMemory.pathOf(it), elapsedMs, length) }
+        if (setting("autoresume enable") != 0) {
+            if (elapsedMs == 0L || (elapsedMs < SKIP_THRESH_MS && !autoSkip)) return
+            memory.setResumePoint(keyOf(e), if (autoSkip) 0 else elapsedMs)
+        }
+    }
+
+    /** Rockbox audio_start_codec(): where a track starts that's given no position. */
+    private fun resumeStartFor(e: Entry, autoSkip: Boolean): Long {
+        if (setting("autoresume enable") == 0) return 0
+        val resume = !autoSkip || when (setting("autoresume next track")) {
+            1 -> true                   // Always
+            2 -> false                  // In custom directories only: no directory list yet
+            else -> false               // No
+        }
+        val at = if (resume) memory.resumePoint(keyOf(e)) else 0L
+        return if (at > 0) (at - setting("resume rewind") * 1000L).coerceAtLeast(0) else 0
+    }
+
+    private fun tagsOf(e: Entry): Engine.RockboxTags? {
+        if (!e.tagsRead) {
+            e.tagsRead = true
+            e.tags = e.uri?.let { RockboxTagFile.read(context, it)?.tags }
+        }
+        return e.tags
+    }
+
+    /** Rockbox single_mode_do_pause(): stop at the start of [next]? */
+    private fun singleModePause(prev: Entry?, next: Entry, newPlaylist: Boolean): Boolean {
+        val mode = setting("single mode")
+        if (mode == 0 || setting("party mode") != 0) return false
+        if (mode == SINGLE_TRACK) return true
+        if (mode == SINGLE_PLAYLIST) return newPlaylist
+        fun tag(e: Entry?): String? {
+            val t = e?.let { tagsOf(it) } ?: return null
+            return when (mode) {
+                2 -> t.album; 3 -> t.albumArtist; 4 -> t.artist; 5 -> t.composer
+                6 -> t.grouping; 7 -> t.genre; else -> null
+            }?.takeIf { it.isNotEmpty() }
+        }
+        val a = tag(prev)
+        val b = tag(next)
+        return a == null || b == null || a != b
+    }
+
+    /** Rockbox system_sound_play(SOUND_TRACK_SKIP / SOUND_TRACK_NO_MORE). */
+    private fun beep(noMore: Boolean) {
+        val strength = setting("beep")
+        if (strength == 0) return
+        if (noMore) Engine.beep(1000, 100, 1500 * strength) else Engine.beep(2000, 100, 2500 * strength)
+    }
+
+    // ---- A-B repeat (Rockbox abrepeat.c) ---------------------------------------
+
+    private val abMode get() = repeat == 4
+
+    fun setAbA() {
+        if (!abMode || !engineActive) return
+        val p = position - EAR_TO_HAND_MS
+        abA = if (p >= 0) p else -1
+        if (abB in 0 until abA) abB = -1
+        abChanged()
+    }
+
+    fun setAbB() {
+        if (!abMode || !engineActive) return
+        val p = position - EAR_TO_HAND_MS
+        abB = if (p >= 0) p else -1
+        if (abA > abB) abA = -1
+        abChanged()
+        jumpToA()
+    }
+
+    fun resetAb() {
+        abA = -1
+        abB = -1
+        abChanged()
+    }
+
+    private fun jumpToA() { if (abA >= 0) seekWithin(abA) else seekWithin(0) }
+
+    private fun abChanged() {
+        onAbChanged?.invoke(abA, abB)
+        queueFollowing()
+        startPolling()
+    }
+
+    // ---- Auto-Change Directory (Rockbox playlist.c get_next_dir) -----------------
+
+    /** A playlist made from one folder of the music tree (Rockbox's "dirplay"). */
+    private fun folderPlaylist(): Pair<Uri, String>? {
+        val first = entries.firstOrNull() ?: return null
+        val dir = first.dirId ?: return null
+        val tree = first.treeUri?.let(Uri::parse) ?: return null
+        return if (entries.all { it.dirId == dir }) tree to dir else null
+    }
+
+    /** Go to the next (or previous, or a random) folder with music. False if it doesn't apply. */
+    private fun changeFolder(direction: Int, autoSkip: Boolean): Boolean {
+        val mode = setting("folder navigation")
+        if (mode == 0) return false
+        val (tree, dir) = folderPlaylist() ?: return false
+        folderJob?.cancel()
+        folderJob = scope.launch {
+            val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                FolderWalk.find(context, tree, dir, direction, random = mode == 2)
+            }
+            if (found == null) {
+                if (autoSkip) endOfPlaylist() else beep(noMore = true)
+                return@launch
+            }
+            val (folder, items) = found
+            trackFinished(entries.getOrNull(index), if (autoSkip) entries.getOrNull(index)?.durationMs ?: 0 else position, autoSkip)
+            stopEngine()
+            entries.clear()
+            items.forEach { entries += Entry(nextUid++, it) }
+            shuffled = false
+            syncOriginal()
+            if (setting("shuffle") != 0 && entries.size > 1) applyShuffle(true, keepCurrentFirst = false)
+            index = if (direction < 0 && !autoSkip) entries.size - 1 else 0
+            heldPositionMs = 0
+            playbackState = Player.STATE_READY
+            if (autoSkip && singleModePause(null, entries[index], newPlaylist = true)) playWhenReady = false
+            if (!autoSkip) beep(noMore = false)
+            Log.i(TAG, "folder change to ${folder.name}")
+            startCurrent(0, autoSkip)
+            updateHolds()
+            invalidateState()
+            savePlaylist()
+        }
+        return true
+    }
+
+    private fun endOfPlaylist() {
+        playbackState = Player.STATE_ENDED
+        heldPositionMs = entries.getOrNull(index)?.durationMs?.takeIf { it != C.TIME_UNSET } ?: 0L
+        updateHolds()
+        invalidateState()
+        savePlaylist()
     }
 
     /** Rockbox playlist_randomise() / playlist_sort(): reorder the queue itself. */
@@ -228,14 +435,16 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         if (playbackState != Player.STATE_READY) abandonFocus()
     }
 
-    private fun startCurrent(startMs: Long) {
+    private fun startCurrent(startMs: Long, autoSkip: Boolean = false) {
         val entry = entries.getOrNull(index) ?: return
+        @Suppress("NAME_SHADOWING")
+        val startMs = if (startMs == 0L) resumeStartFor(entry, autoSkip) else startMs
         val uri = entry.item.localConfiguration?.uri ?: entry.item.requestMetadata.mediaUri
         val opened = uri?.let { open(it) }
         if (opened == null) {
             Log.w(TAG, "can't open $uri; skipping")
             engineActive = false
-            advanceAfterEnd()
+            advanceAfterEnd(failed = true)
             return
         }
         val (pfd, name) = opened
@@ -259,7 +468,11 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     private fun queueFollowing() {
         if (!engineActive) return
         val from = decodeEntry?.let { e -> entries.indexOfFirst { it === e } } ?: index
-        val next = followingIndex(from)?.let { entries.getOrNull(it) }
+        var next = followingIndex(from)?.let { entries.getOrNull(it) }
+        // Single Mode stops at the next track; A-B with only A set loops this one:
+        // either way the engine finishes here and advanceAfterEnd decides.
+        if (next != null && singleModePause(decodeEntry, next, newPlaylist = false)) next = null
+        if (abMode && abA >= 0 && abB < 0) next = null
         if (next === queuedNext && next != null) return
         queuedNext = null
         if (next == null) {
@@ -273,7 +486,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             Engine.clearNext()
             return
         }
-        val serial = Engine.queueNext(opened.first.detachFd(), opened.second)
+        val serial = Engine.queueNext(opened.first.detachFd(), opened.second, resumeStartFor(next, autoSkip = true))
         if (serial >= 0) {
             queuedNext = next
             serialEntries[serial] = next
@@ -309,23 +522,36 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         null
     }
 
-    /** Current track ended (or failed): next entry, or the end of the queue. */
-    private fun advanceAfterEnd() {
+    /** Current track ended by itself (or failed): next entry, or the end of the queue. */
+    private fun advanceAfterEnd(failed: Boolean = false) {
+        val current = entries.getOrNull(index)
+        if (!failed) trackFinished(current, current?.durationMs?.takeIf { it != C.TIME_UNSET } ?: position, autoSkip = true)
+        // A-B repeat with only A set: back to A at the end of the track.
+        if (!failed && abMode && abA >= 0 && abB < 0) {
+            startCurrent(abA)
+            updateHolds()
+            invalidateState()
+            return
+        }
         val n = followingIndex()
         if (n == null && repeat == 3 && entries.isNotEmpty()) {
             // Repeat: Shuffle -- reshuffle the whole playlist and go again.
             applyShuffle(true, keepCurrentFirst = false)
             index = 0
-            startCurrent(0)
+            startCurrent(0, autoSkip = true)
         } else if (n != null) {
+            if (current != null && singleModePause(current, entries[n], newPlaylist = false)) playWhenReady = false
             index = n
-            startCurrent(0)
+            startCurrent(0, autoSkip = true)
+        } else if (changeFolder(1, autoSkip = true)) {
+            return
         } else {
-            playbackState = Player.STATE_ENDED
-            heldPositionMs = entries.getOrNull(index)?.durationMs?.takeIf { it != C.TIME_UNSET } ?: 0L
+            endOfPlaylist()
+            return
         }
         updateHolds()
         invalidateState()
+        savePlaylist()
     }
 
     private val poll = object : Runnable {
@@ -342,6 +568,10 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             val p = Engine.trackSerial
             if (p != playSerial) {
                 // The listener has reached the next file (gapless or crossfade).
+                if (p != manualSerial) serialEntries[playSerial]?.let { old ->
+                    trackFinished(old, old.durationMs.takeIf { it != C.TIME_UNSET } ?: 0L, autoSkip = true)
+                }
+                if (abA >= 0 || abB >= 0) resetAb()
                 playSerial = p
                 serialEntries[p]?.let { e ->
                     val at = entries.indexOfFirst { it === e }
@@ -351,7 +581,14 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
                 heldPositionMs = 0
                 seekTarget = -1
                 invalidateState()
+                savePlaylist()
             }
+            // A-B: reaching B (within Rockbox's 200 ms window) jumps back to A.
+            if (abMode && abB >= 0 && playWhenReady) {
+                val pos = position
+                if (pos >= abB && pos <= abB + B_WINDOW_MS) jumpToA()
+            }
+            if (android.os.SystemClock.uptimeMillis() - lastSavedAt > SAVE_EVERY_MS) savePlaylist()
             if (seekTarget >= 0) {
                 val before = seekTarget
                 position
@@ -380,7 +617,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
                 advanceAfterEnd()
                 return
             }
-            handler.postDelayed(this, POLL_MS)
+            handler.postDelayed(this, if (abMode && abB >= 0) AB_POLL_MS else POLL_MS)
         }
     }
 
@@ -439,6 +676,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     }
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
+        if (partyLocked && !playWhenReady) return Futures.immediateVoidFuture()   // Rockbox: no pausing in party mode
         if (playWhenReady && playbackState == Player.STATE_ENDED && entries.isNotEmpty()) {
             // Play after the end of the queue: start it again from the top.
             index = 0
@@ -446,6 +684,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             playbackState = Player.STATE_READY
         }
         setPlaying(playWhenReady)
+        savePlaylist()
         return Futures.immediateVoidFuture()
     }
 
@@ -460,6 +699,10 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     }
 
     override fun handleStop(): ListenableFuture<*> {
+        if (partyLocked) return Futures.immediateVoidFuture()
+        if (engineActive) trackFinished(entries.getOrNull(index), position, autoSkip = false)
+        savePlaylist()
+        resetAb()
         stopEngine()
         playbackState = Player.STATE_IDLE
         updateHolds()
@@ -484,6 +727,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     }
 
     override fun handleRelease(): ListenableFuture<*> {
+        savePlaylist()
+        if (engineActive) trackFinished(entries.getOrNull(index), position, autoSkip = false)
+        folderJob?.cancel()
         store.removeListener(settingsListener)
         handler.removeCallbacks(poll)
         stopEngine()
@@ -499,6 +745,13 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         startIndex: Int,
         startPositionMs: Long,
     ): ListenableFuture<*> {
+        if (partyLocked) {
+            // Rockbox party mode: playing something new queues it last instead.
+            return handleAddMediaItems(entries.size, mediaItems)
+        }
+        folderJob?.cancel()
+        if (engineActive) trackFinished(entries.getOrNull(index), position, autoSkip = false)
+        resetAb()
         stopEngine()
         entries.clear()
         mediaItems.forEach { entries += Entry(nextUid++, it) }
@@ -517,6 +770,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             if (playbackState == Player.STATE_READY) startCurrent(heldPositionMs)
         }
         updateHolds()
+        savePlaylist()
         return Futures.immediateVoidFuture()
     }
 
@@ -576,7 +830,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     }
 
     override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> {
-        if (entries.isEmpty()) return Futures.immediateVoidFuture()
+        if (entries.isEmpty() || partyLocked) return Futures.immediateVoidFuture()
         // The Next/Previous buttons go through Rockbox's skip rules.
         if (seekCommand == Player.COMMAND_SEEK_TO_NEXT) { playHop(1); return Futures.immediateVoidFuture() }
         if (seekCommand == Player.COMMAND_SEEK_TO_PREVIOUS) { playHop(-1); return Futures.immediateVoidFuture() }
@@ -619,6 +873,12 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
      * "Skip to Outro", "Prevent Track Skipping" and "Rewind Across Tracks".
      */
     private fun playHop(direction: Int) {
+        // Rockbox wps.c: in A-B mode Previous goes back to A once past it, and Next
+        // jumps to A while before it (and otherwise does nothing).
+        if (abMode) {
+            if (direction < 0 && abA >= 0 && position > abA + A_MARKER_VIRTUAL_MS) return jumpToA()
+            if (direction > 0) { if (abA >= 0 && position < abA) jumpToA(); return }
+        }
         val step = setting("skip length") * 1000L
         var elapsed = position
         val length = entries.getOrNull(index)?.durationMs?.takeIf { it != C.TIME_UNSET } ?: Long.MAX_VALUE / 4
@@ -640,7 +900,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
                 }
                 return prevTrack(SKIP_THRESH_MS)
             }
-            direction > 0 && step >= remaining -> return   // "no more" beep in Rockbox
+            direction > 0 && step >= remaining -> return beep(noMore = true)
             direction < 0 && elapsed < step -> elapsed = 0
             else -> elapsed += step * direction
         }
@@ -653,24 +913,26 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         val prev = when {
             index > 0 -> index - 1
             repeat == 1 || repeat == 3 -> entries.size - 1
-            else -> return jumpTo(C.INDEX_UNSET, 0)
+            changeFolder(-1, autoSkip = false) -> return
+            else -> return beep(noMore = true)   // audio_skip(): no track to go to
         }
+        beep(noMore = false)
         jumpTo(prev, 0)
     }
 
-    /** Rockbox audio_next(): the next track; past the end, wrap with repeat, else stop. */
+    /** Rockbox audio_next(): the next track; past the end, wrap with repeat or change
+     *  folder, else just the "no more" beep. */
     private fun nextTrack() {
         when {
-            index + 1 < entries.size -> jumpTo(index + 1, 0)
-            repeat == 3 -> { stopEngine(); applyShuffle(true, keepCurrentFirst = false); jumpTo(0, 0) }
-            repeat == 1 -> jumpTo(0, 0)
-            else -> {
-                stopEngine()
-                playbackState = Player.STATE_ENDED
-                heldPositionMs = 0
-                updateHolds()
-                invalidateState()
+            index + 1 < entries.size -> { beep(noMore = false); jumpTo(index + 1, 0) }
+            repeat == 3 -> {
+                beep(noMore = false)
+                trackFinished(entries.getOrNull(index), position, autoSkip = false)
+                stopEngine(); applyShuffle(true, keepCurrentFirst = false); jumpTo(0, 0)
             }
+            repeat == 1 -> { beep(noMore = false); jumpTo(0, 0) }
+            changeFolder(1, autoSkip = false) -> {}
+            else -> beep(noMore = true)
         }
     }
 
@@ -678,6 +940,10 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         val target = if (mediaItemIndex == C.INDEX_UNSET) index else mediaItemIndex.coerceIn(0, entries.size - 1)
         val pos = if (positionMs == C.TIME_UNSET) 0 else positionMs
         if (playbackState == Player.STATE_ENDED) playbackState = Player.STATE_READY
+        if (target != index && engineActive) {
+            trackFinished(entries.getOrNull(index), position, autoSkip = false)
+            resetAb()
+        }
         if (target == index && engineActive) {
             seekWithin(pos)
         } else if (engineActive && playbackState == Player.STATE_READY && skipTo(target, pos)) {
@@ -690,6 +956,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         }
         updateHolds()
         invalidateState()
+        savePlaylist()
     }
 
     /** Rockbox manual track change, keeping the output going. False if the engine can't. */
@@ -697,8 +964,11 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         val entry = entries.getOrNull(target) ?: return false
         val uri = entry.item.localConfiguration?.uri ?: entry.item.requestMetadata.mediaUri
         val (pfd, name) = uri?.let { open(it) } ?: return false
+        @Suppress("NAME_SHADOWING")
+        val pos = if (pos == 0L) resumeStartFor(entry, autoSkip = false) else pos
         val serial = Engine.skipTo(pfd.detachFd(), name, pos)
         if (serial < 0) return false
+        manualSerial = serial
         serialEntries[serial] = entry
         queuedNext = null
         index = target
@@ -713,5 +983,16 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         private const val POLL_MS = 250L
         /** Rockbox gui/wps.h DEFAULT_SKIP_THRESH. */
         private const val SKIP_THRESH_MS = 3000L
+        /** Rockbox abrepeat.c / abrepeat.h constants. */
+        private const val EAR_TO_HAND_MS = 200L
+        private const val B_WINDOW_MS = 200L
+        private const val A_MARKER_VIRTUAL_MS = 1000L
+        private const val AB_POLL_MS = 50L
+        private const val SAVE_EVERY_MS = 15_000L
+        /** "single mode" values (settings.h SINGLE_MODE_*). */
+        private const val SINGLE_TRACK = 1
+        private const val SINGLE_PLAYLIST = 8
+        /** "start in screen": Resume Playback. */
+        const val START_SCREEN_RESUME_PLAYBACK = 4
     }
 }

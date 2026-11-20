@@ -376,6 +376,9 @@ class SettingsStore private constructor(private val context: Context, val catalo
         val PLAYER_SETTINGS = setOf(
             "shuffle", "repeat", "play selected", "volume fade", "skip length",
             "prevent track skip", "rewind across tracks", "rewind duration on pause",
+            "single mode", "party mode", "beep", "folder navigation", "constrain next folder",
+            "resume rewind", "play log", "album art", "scan min step", "seek acceleration",
+            "autoresume enable", "autoresume next track", "start in screen",
         )
 
         @Volatile private var instance: SettingsStore? = null

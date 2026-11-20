@@ -27,10 +27,13 @@ import llm.slop.slopbox.ui.MusicTree
 import llm.slop.slopbox.ui.Nav
 import llm.slop.slopbox.ui.Queue
 import llm.slop.slopbox.ui.SlopApp
+import llm.slop.slopbox.ui.Screen
 import java.io.File
 
 /** The UI. Playback lives in [PlaybackService]; this activity is a controller. */
 class MainActivity : ComponentActivity() {
+    private companion object { const val KEY_LAST_SCREEN = "lastScreen" }
+
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller by mutableStateOf<MediaController?>(null)
     /** Files to play once the controller connects. */
@@ -81,12 +84,37 @@ class MainActivity : ComponentActivity() {
             controller = c
             pending?.let { playUris(it) }
             pending = null
-            if (resumeToWps && c.mediaItemCount > 0) nav.toNowPlaying()
+            if (resumeToWps) openStartScreen(c)
             resumeToWps = false
         }, MoreExecutors.directExecutor())
     }
 
+    /**
+     * Rockbox "Start Screen" (General Settings › Startup/Shutdown), on a fresh
+     * launch. If music is already playing, go to the WPS as before.
+     */
+    private fun openStartScreen(c: MediaController) {
+        if (c.isPlaying) return nav.toNowPlaying()
+        when (SettingsStore.get(this).int("start in screen")) {
+            0 -> when (getPreferences(MODE_PRIVATE).getString(KEY_LAST_SCREEN, null)) {   // Previous Screen
+                Screen.Browser.name -> nav.toFiles()
+                Screen.Database.name -> nav.push(Screen.Database)
+                Screen.Settings.name -> nav.push(Screen.Settings)
+                Screen.NowPlaying.name -> if (c.mediaItemCount > 0) nav.toNowPlaying()
+            }
+            2 -> nav.toFiles()
+            3 -> nav.push(Screen.Database)
+            4 -> if (c.mediaItemCount > 0) nav.toNowPlaying()   // Resume Playback (the player starts it)
+            5 -> nav.push(Screen.Settings)
+            else -> {}   // Main Menu; Recent Bookmarks and Open Plugin aren't in SlopBox
+        }
+    }
+
     override fun onStop() {
+        // For "Start Screen: Previous Screen".
+        getPreferences(MODE_PRIVATE).edit().putString(KEY_LAST_SCREEN, nav.stack.lastOrNull {
+            it in setOf(Screen.Browser, Screen.Database, Screen.Settings, Screen.NowPlaying)
+        }?.name).apply()
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         controller = null
@@ -101,6 +129,16 @@ class MainActivity : ComponentActivity() {
     /** "Open with" (content URI), or in debug builds raw paths for adb tests:
      *  adb shell am start -n llm.slop.slopbox/.MainActivity --es path /data/.../a.flac,/data/.../b.mp3 */
     private fun handleIntent(intent: Intent?) {
+        // Debug builds: "--es ab a|b|reset" sends the A-B repeat commands (for adb tests).
+        if (BuildConfig.DEBUG) intent?.getStringExtra("ab")?.let { ab ->
+            val cmd = when (ab) {
+                "a" -> PlaybackService.CMD_AB_SET_A
+                "b" -> PlaybackService.CMD_AB_SET_B
+                else -> PlaybackService.CMD_AB_RESET
+            }
+            controller?.sendCustomCommand(androidx.media3.session.SessionCommand(cmd, Bundle.EMPTY), Bundle.EMPTY)
+            return
+        }
         val debugPaths = if (BuildConfig.DEBUG) intent?.getStringExtra("path") else null
         val uris = when {
             debugPaths != null -> debugPaths.split(',').map { Uri.fromFile(File(it)) }

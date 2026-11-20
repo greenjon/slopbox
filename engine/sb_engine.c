@@ -185,7 +185,49 @@ static void emit_pcm(int16_t *pcm, int frames)
     }
 }
 
+/* Rockbox apps/beep.c: a square wave on its own mixer channel. */
+static atomic_uint beep_step = 0, beep_amplitude = 0;
+static atomic_int beep_count = 0;
+static uint32_t beep_phase;
+
+void sb_beep(unsigned frequency, unsigned duration_ms, unsigned amplitude)
+{
+    if (amplitude > INT16_MAX)
+        amplitude = INT16_MAX;
+    atomic_store(&beep_count, 0);
+    beep_phase = 0;
+    atomic_store(&beep_step, (uint32_t)(((uint64_t)frequency << 32) / DSP_OUT_DEFAULT_HZ));
+    atomic_store(&beep_amplitude, amplitude);
+    atomic_store(&beep_count, (int)(DSP_OUT_DEFAULT_HZ / 1000 * duration_ms));
+}
+
+static void mix_beep(int16_t *pcm, int frames)
+{
+    int count = atomic_load(&beep_count);
+    if (count <= 0)
+        return;
+    uint32_t step = atomic_load(&beep_step);
+    int32_t amp = (int32_t)atomic_load(&beep_amplitude);
+    int n = count < frames ? count : frames;
+    for (int i = 0; i < n; i++) {
+        int32_t a = beep_phase > UINT32_MAX / 2 ? -amp : amp;
+        int32_t l = pcm[i * 2] + a, r = pcm[i * 2 + 1] + a;
+        pcm[i * 2] = (int16_t)(l > 32767 ? 32767 : l < -32768 ? -32768 : l);
+        pcm[i * 2 + 1] = (int16_t)(r > 32767 ? 32767 : r < -32768 ? -32768 : r);
+        beep_phase += step;
+    }
+    atomic_fetch_sub(&beep_count, n);
+}
+
+static void output_gains(int16_t *pcm, int frames);
+
 void sb_output_process(int16_t *pcm, int frames)
+{
+    output_gains(pcm, frames);
+    mix_beep(pcm, frames);
+}
+
+static void output_gains(int16_t *pcm, int frames)
 {
     /* Volume and balance from Rockbox's sound.c, ducking, and the pause fade:
      * applied as audio leaves the buffer, so they act at once. */

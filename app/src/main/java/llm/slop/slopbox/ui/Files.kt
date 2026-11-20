@@ -128,8 +128,14 @@ object TagReader {
     /** Tags and embedded art via Rockbox's own parser; folder images as Rockbox looks for them. */
     suspend fun read(ctx: Context, item: MediaItem, withArt: Boolean): Tags = withContext(Dispatchers.IO) {
         val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri ?: return@withContext Tags()
-        val r = RockboxTagFile.read(ctx, uri, withArt = withArt)
-        val art = if (!withArt) null else r?.art?.let { decode(it) } ?: folderArt(ctx, item, uri)
+        // Rockbox "Album Art": Off, Prefer Embedded, Prefer Image File.
+        val artMode = if (withArt) llm.slop.slopbox.SettingsStore.get(ctx).int("album art") else 0
+        val r = RockboxTagFile.read(ctx, uri, withArt = artMode != 0)
+        val art = when (artMode) {
+            0 -> null
+            2 -> folderArt(ctx, item, uri) ?: r?.art?.let { decode(it) }
+            else -> r?.art?.let { decode(it) } ?: folderArt(ctx, item, uri)
+        }
         val t = r?.tags ?: return@withContext Tags(art = art)
         Tags(
             title = t.title.trim(),

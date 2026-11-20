@@ -17,6 +17,8 @@ extern "C" {
  * thread reads it with sb_pcmbuf_read() and passes each block through
  * sb_output_process() (volume, balance, ducking, pause fade) before playing it. */
 void sb_output_process(int16_t *pcm, int frames);
+/* Rockbox beep_play(): a square wave mixed into the output (track skip beep). */
+void sb_beep(unsigned frequency, unsigned duration_ms, unsigned amplitude);
 
 struct sb_track_info {
     char title[256];

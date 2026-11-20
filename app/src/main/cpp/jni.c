@@ -378,7 +378,7 @@ Java_llm_slop_slopbox_Engine_nativeSetDuckDb(JNIEnv *env, jobject thiz, jint db)
  * or -1 if nothing is decoding to follow. */
 JNIEXPORT jint JNICALL
 Java_llm_slop_slopbox_Engine_nativeQueueNext(JNIEnv *env, jobject thiz,
-                                             jint fd, jstring jname)
+                                             jint fd, jstring jname, jlong start_ms)
 {
     pthread_mutex_lock(&player_lock);
     if (!threads_running || !atomic_load(&decoding) || skip_requested) {
@@ -387,7 +387,7 @@ Java_llm_slop_slopbox_Engine_nativeQueueNext(JNIEnv *env, jobject thiz,
         return -1;
     }
     free_job(next_job);
-    next_job = make_job(env, fd, jname, 0, true);
+    next_job = make_job(env, fd, jname, start_ms, true);
     int serial = next_job->serial;
     pthread_mutex_unlock(&player_lock);
     return serial;
@@ -459,4 +459,11 @@ Java_llm_slop_slopbox_Engine_nativeReadTags(JNIEnv *env, jobject thiz,
         (*env)->DeleteLocalRef(env, js);
     }
     return a;
+}
+
+JNIEXPORT void JNICALL
+Java_llm_slop_slopbox_Engine_nativeBeep(JNIEnv *env, jobject thiz,
+                                        jint freq, jint ms, jint amplitude)
+{
+    sb_beep((unsigned)freq, (unsigned)ms, (unsigned)amplitude);
 }

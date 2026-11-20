@@ -21,6 +21,8 @@ encoder padding is trimmed by Rockbox's codec).
 
 Tested on a Unihertz Jelly Star (Android 13, arm64).
 
+Known differences from Rockbox are listed in [docs/DIFFERENCES.md](docs/DIFFERENCES.md).
+
 ## Settings, straight from Rockbox
 
 SlopBox's Settings menu is Rockbox's. `settings-gen/` compiles Rockbox's own
@@ -47,7 +49,11 @@ Rewind on Pause and Fade on Stop/Pause. Crossfade works like Rockbox's
 `pcmbuf.c`: decoded audio queues in a PCM buffer (`engine/sb_pcmbuf.c`) that,
 with crossfade on, runs the fade-out delay + duration + 1 s ahead; at a track
 change the buffered tail is faded out and the new track mixed in, with all six
-modes, both delays and durations, and Mix mode.
+modes, both delays and durations, and Mix mode. Also in step with Rockbox:
+Single Mode, Party Mode, A-B repeat (as session commands; the playing screen
+has no buttons yet), Track Skip Beep, Auto-Change Directory, Logging, Album
+Art, FF/RW acceleration, playlist resume with Rewind Before Resume and Start
+Screen, and Automatic Resume.
 
 ## Layout
 

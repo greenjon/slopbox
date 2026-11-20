@@ -34,7 +34,9 @@ object Engine {
      * Queue [fd] to follow the file being decoded (gapless or crossfade). Takes
      * ownership. Returns its serial, or -1.
      */
-    fun queueNext(fd: Int, name: String): Int = nativeQueueNext(fd, name)
+    fun queueNext(fd: Int, name: String, startMs: Long = 0): Int = nativeQueueNext(fd, name, startMs)
+    /** Rockbox beep_play(): square wave mixed into the output. */
+    fun beep(frequency: Int, durationMs: Int, amplitude: Int) = nativeBeep(frequency, durationMs, amplitude)
     fun clearNext() = nativeClearNext()
     /** Serial of the file being heard now. */
     val trackSerial: Int get() = nativeTrackSerial()
@@ -95,7 +97,8 @@ object Engine {
     private external fun nativePlayFd(fd: Int, name: String, startMs: Long, paused: Boolean): Int
     private external fun nativeSkipTo(fd: Int, name: String, startMs: Long): Int
     private external fun nativeStop()
-    private external fun nativeQueueNext(fd: Int, name: String): Int
+    private external fun nativeQueueNext(fd: Int, name: String, startMs: Long): Int
+    private external fun nativeBeep(freq: Int, ms: Int, amplitude: Int)
     private external fun nativeClearNext()
     private external fun nativeTrackSerial(): Int
     private external fun nativeDecodeSerial(): Int

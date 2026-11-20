@@ -83,10 +83,6 @@ Anything new goes here in the same change that introduces it.
   no further effect. "Random" picks from a folder list built on the fly;
   Rockbox needs `folder_advance_list.dat` from a plugin. A "folder playlist"
   means every track came from the same folder (Rockbox's `dirplay` flag).
-- **Next on the last track.** With repeat off, Android's media framework
-  doesn't pass Next through when there's no next item. So Next on the last
-  track does nothing: no "no more" beep, no folder change, and no Skip Length
-  hop. Rockbox handles all three.
 - **FF/RW.** The acceleration follows Rockbox's `ffwd_rew()`, but steps
   repeat every 150 ms of holding (the UI's rate), not at Rockbox's button
   repeat rate.

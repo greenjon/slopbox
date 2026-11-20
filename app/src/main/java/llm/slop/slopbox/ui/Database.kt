@@ -230,7 +230,8 @@ private fun LevelList(
     val ctx = LocalContext.current
     val tracks = TagDb.tracks
     val playingTrack = playing(controller)
-    val query = remember(tracks, navi, playingTrack?.id) { Query(navi, tracks, TagDb.commits, playingTrack) }
+    val statsRev = TagDb.statsRevision
+    val query = remember(tracks, navi, playingTrack?.id, statsRev) { Query(navi, tracks, TagDb.commits, playingTrack) }
     val key = level.entry.label + "/" + level.step + "/" + level.picks.joinToString("\u0001")
 
     if (level.isTrackList) {

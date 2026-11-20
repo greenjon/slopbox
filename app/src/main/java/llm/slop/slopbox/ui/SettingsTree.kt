@@ -91,6 +91,30 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
         else { store.loadCfg(text); toast(cat.str("LANG_SETTINGS_LOADED")) }
     }
 
+    fun exportChangelog() {
+        val tree = MusicTree.root(ctx) ?: run { message = "Choose the music folder first."; return }
+        toast(cat.str("LANG_CREATING"))
+        val ok = runCatching {
+            val text = TagDb.changelog(ctx)
+            val root = MusicTree.rootId(tree)
+            val existing = llm.slop.slopbox.FileOps.children(ctx, tree, root).firstOrNull { it.name == CHANGELOG }
+            val uri = existing?.let { MusicTree.docUri(tree, it.id) } ?: android.provider.DocumentsContract.createDocument(
+                ctx.contentResolver, MusicTree.docUri(tree, root), "text/plain", CHANGELOG)!!
+            ctx.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(text.toByteArray()) }
+        }.isSuccess
+        if (!ok) toast(cat.str("LANG_FAILED"))
+    }
+
+    fun importChangelog() {
+        val tree = MusicTree.root(ctx) ?: run { message = "Choose the music folder first."; return }
+        val f = llm.slop.slopbox.FileOps.children(ctx, tree, MusicTree.rootId(tree)).firstOrNull { it.name == CHANGELOG }
+        val text = f?.let { runCatching {
+            ctx.contentResolver.openInputStream(MusicTree.docUri(tree, it.id))!!.bufferedReader().readText()
+        }.getOrNull() }
+        if (text == null) { toast(cat.str("LANG_FAILED")); return }
+        TagDb.importChangelog(ctx, text)
+    }
+
     fun runFunction(item: RbMenuItem) {
         val tree = MusicTree.root(ctx)
         when (item.function) {
@@ -123,6 +147,13 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                     toast(item.text)
                 }
             "dirs_to_scan" -> pickRoot()
+            null -> when (item.text) {
+                // Database › Export / Import Modifications (tagtree_export / tagtree_import):
+                // Rockbox's database_changelog.txt, kept in the music folder.
+                cat.str("LANG_TAGCACHE_EXPORT") -> exportChangelog()
+                cat.str("LANG_TAGCACHE_IMPORT") -> importChangelog()
+                else -> message = "${item.text}: not available in SlopBox yet."
+            }
             "toggle_sleeptimer" -> llm.slop.slopbox.PowerMgmt.toggleSleepTimer()
             // General Settings › While Playing Screen
             "reset_wps_items" -> { WpsContext.reset(store); toast(item.text) }
@@ -329,3 +360,6 @@ private fun qFormat(v: Int) = "${v / 10}.${v % 10}"
 private val GAIN_LABELS = (-240..240).map { it to dbFormat(it) }
 private val Q_LABELS = (1..64).map { it to qFormat(it) }
 private val CUTOFF_LABELS = (20..22040 step 10).map { it to "$it Hz" }
+
+/** Rockbox TAGCACHE_FILE_CHANGELOG. */
+private const val CHANGELOG = "database_changelog.txt"

@@ -171,6 +171,8 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         e ?: return
         val length = e.durationMs.takeIf { it != C.TIME_UNSET } ?: 0L
         if (setting("play log") != 0) e.uri?.let { memory.log(PlaybackMemory.pathOf(it), elapsedMs, length) }
+        // Rockbox runtime database: play count, play time, last played.
+        llm.slop.slopbox.ui.db.TagDb.trackFinished(context, e.item.mediaId, elapsedMs, length, autoSkip)
         if (setting("autoresume enable") != 0) {
             if (elapsedMs == 0L || (elapsedMs < SKIP_THRESH_MS && !autoSkip)) return
             memory.setResumePoint(keyOf(e), if (autoSkip) 0 else elapsedMs)

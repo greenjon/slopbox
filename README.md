@@ -65,7 +65,11 @@ playing screen's menu with its configurable items (While Playing Screen
 settings), and the file browser's Rename, Cut, Copy, Paste, Delete, Create
 Directory, Properties, Show Track Info and Set As. The pitch screen is a port
 of Rockbox's pitch screen plugin, with rate, semitone and timestretch modes,
-and its arithmetic is checked against Rockbox's C in the unit tests.
+and its arithmetic is checked against Rockbox's C in the unit tests. With
+Gather Runtime Data on, the database keeps Rockbox's play counts, ratings,
+play time, last played and autoscore, which fill the Playback History and
+User Rating menus of Rockbox's `tagnavi.config`; Export and Import
+Modifications use Rockbox's `database_changelog.txt` format.
 
 ## Layout
 

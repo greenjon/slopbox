@@ -393,7 +393,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "warn when erasing dynamic playlist", "keep current track when replacing playlist",
             "show shuffled adding options", "show queue options",
             "context_wps", "Semitone pitch change", "Timestretch mode",
-            "start directory", "playlist catalog directory",
+            "start directory", "playlist catalog directory", "gather runtime data",
         )
 
         @Volatile private var instance: SettingsStore? = null

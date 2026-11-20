@@ -24,7 +24,7 @@ class TagNaviTest {
         t("a5", "", "", "", 0, year = 0),
         t("a6", "Only AA", "", "Comp", 1, albumArtist = "Various", commit = 3),
     )
-    private val q = Query(navi, tracks, commits = 3, playing = tracks[0])
+    private val q = Query(navi, tracks, commits = 3, playing = tracks[0], stats = { Stats() })
 
     private fun entry(menu: String, label: String) =
         navi.menu(menu)!!.entries.first { it.label == label } as TagNavi.Entry.Chain
@@ -75,5 +75,31 @@ class TagNaviTest {
         assertEquals(4, q.values(Level(recent, 0, emptyList(), emptyMap(), "")).size) // every album is < 4 scans old
         val same = navi.menu("same")!!.entries.first { it.label == "Album" } as TagNavi.Entry.Chain
         assertEquals(2, q.trackLines(Level(same, 0, emptyList(), emptyMap(), "")).size)
+    }
+
+    @Test fun playbackHistory() {
+        // a1: played 5 times in full; a3: twice, half each time; a4 once, rated 7.
+        val st = mapOf(
+            "a1" to Stats(playcount = 5, playtime = 5 * 125_000L, lastplayed = 2),
+            "a3" to Stats(playcount = 2, playtime = 125_000L, lastplayed = 7),
+            "a4" to Stats(playcount = 1, rating = 7, playtime = 125_000L, lastplayed = 4),
+        )
+        val rq = Query(navi, tracks, commits = 3, playing = null, stats = { st[it] ?: Stats() })
+        // fmt_mostplayed "%2d|%3d %s (%s)" playcount autoscore title canonicalartist, sorted inverse.
+        val most = rq.trackLines(Level(entry("runtime", "Most played (Plays|Score)"), 0, emptyList(), emptyMap(), "x"))
+        assertEquals(listOf(" 5|100 Second (Beta)", " 2| 50 Track 10 (alpha)", " 1|100 Track 9 (alpha)"), most.map { it.first })
+        // fmt_lastplayed "%06d%s - %s" lastplayed ..., inverse, the 6-digit key stripped.
+        val recent = rq.trackLines(Level(entry("runtime", "Recently played tracks"), 0, emptyList(), emptyMap(), "x"))
+        assertEquals(listOf("alpha - Track 10", "alpha - Track 9", "Beta - Second"), recent.map { it.first })
+        // "User Rating" -> rating: the values present.
+        assertEquals(listOf("0", "7"), rq.values(Level(entry("main", "User Rating"), 0, emptyList(), emptyMap(), "x")))
+    }
+
+    @Test fun changelogLine() {
+        val m = TagDb.parseChangelogLine("""artist="A \"B\"" filename="/Music/x.mp3" playcount="3" title="l1\nl2" """)
+        assertEquals("A \"B\"", m["artist"])
+        assertEquals("/Music/x.mp3", m["filename"])
+        assertEquals("3", m["playcount"])
+        assertEquals("l1\nl2", m["title"])
     }
 }

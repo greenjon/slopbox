@@ -7,8 +7,8 @@ import llm.slop.slopbox.ui.db.TagNavi.Format
 
 const val UNTAGGED = "[Untagged]"
 
-/** Tag values of a track, by tagnavi name. Runtime stats (play counts, ratings) are 0 for now. */
-class Tags(private val commits: Int) {
+/** Tag values of a track, by tagnavi name, runtime statistics included. */
+class Tags(private val commits: Int, private val stats: (String) -> Stats = { TagDb.statsOf(it) }) {
     fun str(t: Track, tag: String): String = when (tag) {
         "title" -> t.title
         "artist" -> t.artist
@@ -33,8 +33,24 @@ class Tags(private val commits: Int) {
         "bitrate" -> t.bitrate.toLong()
         "commitid" -> t.commitId.toLong()
         "entryage" -> (commits - t.commitId).toLong()
+        "playcount" -> stats(t.id).playcount.toLong()
+        "rating" -> stats(t.id).rating.toLong()
+        "playtime" -> stats(t.id).playtime
+        "pm" -> stats(t.id).playtime / 60000
+        "ps" -> (stats(t.id).playtime / 1000) % 60
+        "lastplayed" -> stats(t.id).lastplayed
+        "autoscore" -> autoscore(t)
         in TagNavi.NUMERIC -> 0
         else -> str(t, tag).takeWhile { it.isDigit() }.toLongOrNull() ?: 0
+    }
+
+    /** Rockbox tag_virt_autoscore: 100 x playtime / length / playcount, in integers. */
+    private fun autoscore(t: Track): Long {
+        val st = stats(t.id)
+        val length = t.lengthMs
+        if (length == 0L || st.playcount == 0) return 0
+        val playtime = st.playtime
+        return (100 * (playtime / length) + (100 * (playtime % length)) / length) / st.playcount
     }
 
     /** A value as listed: empty shows as [Untagged]. */
@@ -61,8 +77,11 @@ class Level(
 }
 
 /** Runs [TagNavi] chains over the database. */
-class Query(private val navi: TagNavi, private val tracks: List<Track>, commits: Int, private val playing: Track?) {
-    val tags = Tags(commits)
+class Query(
+    private val navi: TagNavi, private val tracks: List<Track>, commits: Int, private val playing: Track?,
+    stats: (String) -> Stats = { TagDb.statsOf(it) },
+) {
+    val tags = Tags(commits, stats)
 
     private fun resolve(c: Clause, inputs: Map<Clause, String>): String {
         if (c.value.isEmpty()) return inputs[c] ?: ""

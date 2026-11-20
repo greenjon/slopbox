@@ -177,8 +177,8 @@ Anything new goes here in the same change that introduces it.
 - **WPS hotkey.** The first "context_wps" item is the WPS hotkey, as on
   Rockbox targets with a hotkey button. SlopBox stores it, but no touch on
   the playing screen triggers it yet.
-- **Set Rating.** It isn't shown, because SlopBox has no runtime database yet
-  (Rockbox hides it in that case too).
+- **Set Song Rating.** You pick 0 to 10 from a list rather than Rockbox's
+  number spinner.
 - **Open With.** Rockbox lists its viewer plugins. SlopBox hands the file to
   another Android app through the system chooser.
 - **Open Plugin.** SlopBox has no plugins, so this item only says so.
@@ -217,6 +217,19 @@ Anything new goes here in the same change that introduces it.
   `tagcache`. Tags are read with Rockbox's metadata parser.
 - **Track numbers.** Rockbox reports "no track number" as -1; the database
   stores 0.
+- **Runtime data.** Play count, rating, play time and last played follow
+  Rockbox's rules (Gather Runtime Data, the 15 s rule, autoscore, the
+  last-played serial, kept on Update Now and lost on Initialize Now). A file
+  that moved gets its statistics back as in Rockbox, but SlopBox compares the
+  file name, artist, album and title themselves rather than their CRC32
+  hashes. The playing screen doesn't show them, because there are no skins.
+- **Export and Import Modifications.** `database_changelog.txt` is written
+  to and read from the top of the music folder, not Rockbox's database
+  directory. Its file names are storage paths (`/Music/...`), so a changelog
+  from a Rockbox player matches when the music sits at the same path.
+  `comment` and `grouping` are written empty because SlopBox's database
+  doesn't keep them, `lastoffset` is 0, and `lastelapsed` comes from
+  SlopBox's Automatic Resume points (and goes back into them on import).
 
 ## Interface
 

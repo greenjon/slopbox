@@ -206,6 +206,7 @@ fun WpsContextMenu(controller: MediaController?, nav: Nav, browser: BrowserState
     val store = remember { SettingsStore.get(ctx) }
     var chooser by remember { mutableStateOf(false) }
     var pitchMenu by remember { mutableStateOf(false) }
+    var rating by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf<PlayingFile?>(null) }
     // Rockbox: with pitch or speed changed, the item reads "Pitch 110.0% / 105.0%"
     // and opens a submenu (pitch_menu: Pitch, Reset Setting).
@@ -251,6 +252,24 @@ fun WpsContextMenu(controller: MediaController?, nav: Nav, browser: BrowserState
         }
         return
     }
+    // Rockbox set_rating_inline(): Set Rating, 0 to 10, for a track in the database.
+    val playingId = controller?.currentMediaItem?.mediaId
+    if (rating && playingId != null) {
+        BackHandler { rating = false }
+        val cur = llm.slop.slopbox.ui.db.TagDb.statsOf(playingId).rating
+        Column(Modifier.fillMaxSize()) {
+            TitleBar(str(ctx, "LANG_MENU_SET_RATING"), onBack = { rating = false })
+            LazyColumn(Modifier.fillMaxSize(), state = rememberLazyListState(cur.coerceAtMost(6))) {
+                items((0..10).toList()) { v ->
+                    RockRow(v.toString(), selected = v == cur) {
+                        llm.slop.slopbox.ui.db.TagDb.setRating(ctx, playingId, v)
+                        rating = false; nav.pop()
+                    }
+                }
+            }
+        }
+        return
+    }
     if (pitchMenu) {
         BackHandler { pitchMenu = false }
         Column(Modifier.fillMaxSize()) {
@@ -283,6 +302,10 @@ fun WpsContextMenu(controller: MediaController?, nav: Nav, browser: BrowserState
             }
             item { RockRow(str(ctx, "LANG_SOUND_SETTINGS"), icon = G.Config) { nav.pop(); SettingsView.open(nav, "Sound Settings") } }
             item { RockRow(str(ctx, "LANG_PLAYBACK"), icon = G.Config) { nav.pop(); SettingsView.open(nav, "Playback Settings") } }
+            // ratingitem_callback(): only with "Gather Runtime Data" on and the track in the database.
+            if (store.int("gather runtime data") != 0 && playingId != null && llm.slop.slopbox.ui.db.TagDb.contains(playingId)) item {
+                RockRow(str(ctx, "LANG_MENU_SET_RATING"), icon = G.Cursor) { rating = true }
+            }
             item { RockRow(str(ctx, "LANG_BOOKMARK_MENU"), icon = G.Config) { nav.pop(); nav.push(Screen.Bookmarks) } }
             if (cue != null) item { RockRow(str(ctx, "LANG_BROWSE_CUESHEET"), icon = G.Cursor) { nav.pop(); nav.push(Screen.Cuesheet) } }
             val ctxItems = WpsContext.items(store)

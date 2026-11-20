@@ -25,6 +25,7 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         SettingsStore.get(this) // the user's Rockbox settings, applied to the engine
         Pitch.init(this)        // global_status resume_pitch / resume_speed
+        llm.slop.slopbox.ui.db.TagDb.load(this) // for the runtime database
         val player = SlopPlayer(this)
         player.onAbChanged = { a, b ->
             session?.setSessionExtras(android.os.Bundle().apply {

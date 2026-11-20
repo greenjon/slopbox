@@ -84,7 +84,7 @@ private fun Track.toItem(ctx: Context): MediaItem? {
 private enum class DbAction { Play, InsertNext, InsertLast }
 
 @Composable
-fun DatabaseScreen(controller: MediaController?, nav: Nav, state: DatabaseState) {
+fun DatabaseScreen(controller: MediaController?, nav: Nav, state: DatabaseState, browser: BrowserState) {
     val ctx = LocalContext.current
     LaunchedEffect(Unit) {
         TagDb.load(ctx)
@@ -92,10 +92,11 @@ fun DatabaseScreen(controller: MediaController?, nav: Nav, state: DatabaseState)
     }
     val navi = state.navi
     var menu by remember { mutableStateOf<Pair<String, List<Track>>?>(null) }
+    var playingNext by remember { mutableStateOf(false) }
     var dbMenu by remember { mutableStateOf(false) }
 
     BackHandler(enabled = menu == null && !dbMenu && state.stack.size > 1) { state.stack.removeAt(state.stack.lastIndex) }
-    BackHandler(enabled = menu != null || dbMenu) { menu = null; dbMenu = false }
+    BackHandler(enabled = menu != null || dbMenu) { if (playingNext) playingNext = false else menu = null; dbMenu = false }
 
     fun act(a: DbAction, tracks: List<Track>) {
         val c = controller ?: return
@@ -107,15 +108,45 @@ fun DatabaseScreen(controller: MediaController?, nav: Nav, state: DatabaseState)
         }
     }
 
-    // Full-screen menus, as in Rockbox: the "Playing Next..." menu.
+    // Full-screen menus, as in Rockbox: the context menu (tree_onplay_menu in
+    // CONTEXT_ID3DB: Playing Next, Add to Playlist, Show Track Info, Show in Files).
     menu?.let { (title, tracks) ->
-        PlayingNextMenu(title, folderLike = tracks.size > 1, recursable = false, onBack = { menu = null }) { choice, _ ->
-            menu = null
-            val items = tracks.mapNotNull { it.toItem(ctx) }
-            val p = llm.slop.slopbox.SlopPlayer.current
-            if (p != null) p.addToPlaylist(items, choice.position, choice.queue, choice.replace)
-            else controller?.let { Queue.play(it, items, 0) }
-            if (choice.replace) nav.toNowPlaying()
+        if (playingNext) {
+            PlayingNextMenu(title, folderLike = tracks.size > 1, recursable = false, onBack = { playingNext = false }) { choice, _ ->
+                menu = null; playingNext = false
+                val items = tracks.mapNotNull { it.toItem(ctx) }
+                val p = llm.slop.slopbox.SlopPlayer.current
+                if (p != null) p.addToPlaylist(items, choice.position, choice.queue, choice.replace)
+                else controller?.let { Queue.play(it, items, 0) }
+                if (choice.replace) nav.toNowPlaying()
+            }
+            return
+        }
+        val cat = llm.slop.slopbox.SettingsStore.get(ctx).catalog
+        val single = tracks.singleOrNull()
+        Column(Modifier.fillMaxSize()) {
+            TitleBar(title, onBack = { menu = null })
+            RockRow(cat.str("LANG_PLAYING_NEXT"), icon = G.Cursor) { playingNext = true }
+            RockRow(cat.str("LANG_ADD_TO_PL"), icon = G.Cursor) {
+                PlaylistsView.addPaths = tracks.mapNotNull { it.toItem(ctx)?.requestMetadata?.mediaUri }
+                    .map { llm.slop.slopbox.PlaybackMemory.pathOf(it) }
+                PlaylistsView.addTitle = title
+                menu = null
+                nav.push(Screen.AddToPlaylist)
+            }
+            if (single != null) {
+                RockRow(cat.str("LANG_MENU_SHOW_ID3_INFO"), icon = G.Cursor) {
+                    TrackInfoView.item = single.toItem(ctx)
+                    menu = null
+                    nav.push(Screen.TrackInfo)
+                }
+                RockRow(cat.str("LANG_SHOW_IN_FILES"), icon = G.Cursor) {
+                    val tree = MusicTree.root(ctx)
+                    menu = null
+                    if (tree != null && browser.reveal(ctx, tree, single.id)) nav.toFiles()
+                    else android.widget.Toast.makeText(ctx, cat.str("LANG_FILE_NOT_FOUND"), android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
         }
         return
     }

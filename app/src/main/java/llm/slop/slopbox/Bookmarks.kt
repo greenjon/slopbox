@@ -25,6 +25,9 @@ class Bookmarks(context: Context) {
         val playlist: String,
         val file: String,
         val line: String,
+        /** Rockbox's optional pitch and speed (timestretch) tokens, 10000 = 100%. */
+        val pitch: Int? = null,
+        val speed: Int? = null,
     ) {
         /** Rockbox get_bookmark_info(): "track name" and "time, number[ (Shuffle)]". */
         val title: String get() = file.substringBeforeLast('.')
@@ -89,7 +92,7 @@ class Bookmarks(context: Context) {
         private const val BM_PITCH = 1
         private const val BM_SPEED = 2
         /** Rockbox PITCH_SPEED_100 (100%). */
-        const val SPEED_100 = 1_000_000L
+        const val SPEED_100 = 10_000L
 
         /** Rockbox create_bookmark(). Offset is 0: SlopBox resumes by time. */
         fun format(index: Int, elapsedMs: Long, seed: Int, repeat: Int, shuffle: Boolean,
@@ -114,13 +117,13 @@ class Bookmarks(context: Context) {
             val elapsed = next()?.toLongOrNull() ?: return null
             val repeat = next()?.toIntOrNull() ?: 0
             val shuffle = (next()?.toIntOrNull() ?: 0) != 0
-            if (flags and BM_PITCH != 0) next()
-            if (flags and BM_SPEED != 0) next()
+            val pitch = if (flags and BM_PITCH != 0) next()?.toIntOrNull() else null
+            val speed = if (flags and BM_SPEED != 0) next()?.toIntOrNull() else null
             val rest = tokens.drop(i)
             if (rest.size < 2) return null
             val playlist = rest.dropLast(1).joinToString(";")
             val file = rest.last().substringAfterLast('/')
-            return Bookmark(index, elapsed, seed, repeat, shuffle, playlist, file, line.trim())
+            return Bookmark(index, elapsed, seed, repeat, shuffle, playlist, file, line.trim(), pitch, speed)
         }
 
         /** "/Music/Album/" for a folder document id like "primary:Music/Album". */

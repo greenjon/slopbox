@@ -124,14 +124,14 @@ Anything new goes here in the same change that introduces it.
   storage (`files/bookmarks/`, `files/most-recent.bmark`), because Android
   grants it read-only access to the music folder. `bookmark.ignore` and
   `bookmark.unignore` files aren't checked.
-- **What can be bookmarked.** Only folder playlists, as in Rockbox, but saved
-  playlist files (`.m3u`) aren't supported yet, so they can't be bookmarked.
+- **What can be bookmarked.** Folder playlists and playlist files, as in
+  Rockbox. A playlist built by inserting tracks is bookmarked by its folder
+  only when all its tracks share one.
 - **Shuffled bookmarks.** Rockbox stores its shuffle seed and rebuilds the
   same order. SlopBox stores the track's place in natural order; loading
   reshuffles with that track first.
 - **Bookmark details.** The byte offset is written as 0, and SlopBox resumes
-  by time. Pitch and speed are written as 100% and ignored when loading,
-  because there's no pitch screen yet.
+  by time. Pitch and speed are saved and restored as in Rockbox.
 - **Bookmark list actions.** Rockbox offers Resume or Delete from a context
   menu. In SlopBox you tap to resume and hold to delete.
 - **"Ask" prompts.** They appear only when SlopBox's screen is connected to
@@ -154,11 +154,15 @@ Anything new goes here in the same change that introduces it.
 - **Saving with queued tracks.** Rockbox asks "Remove Queued Tracks?". SlopBox
   doesn't ask: it saves without the queued tracks and leaves them in the
   current playlist, which is what Rockbox does when you answer No.
-- **Not implemented yet.** Create Playlist (from a folder) in the catalog
-  menu, Search in Playlist, Reset Playlist Directory, and the playlist
-  viewer's per-track context menu. The viewer offers Remove and Move instead.
-  Move is "tap a track, then tap where it goes" rather than Rockbox's
-  move-cursor mode.
+- **Playlist viewer.** It has no per-track context menu. It offers Remove
+  and Move instead, and Move is "tap a track, then tap where it goes" rather
+  than Rockbox's move-cursor mode.
+- **Catalog folder from Set As.** "Set As... › Playlist Directory" works only
+  for a folder inside the music folder.
+- **Create Playlist.** It collects every track in the music folder, not from
+  `/`.
+- **Search in Playlist.** The number found is shown above the results rather
+  than in a splash, and there's no limit on the number of results.
 - **Playlist names.** You type a name in a text field rather than Rockbox's
   on-screen keyboard. The suggested name is the playlist file's name, the
   folder's name or "PlaylistN", following Rockbox's rules.
@@ -167,6 +171,45 @@ Anything new goes here in the same change that introduces it.
   buffer.
 - **Queued tracks in the viewer.** They aren't drawn with Rockbox's separate
   queued icon.
+
+## Context menus and files
+
+- **WPS hotkey.** The first "context_wps" item is the WPS hotkey, as on
+  Rockbox targets with a hotkey button. SlopBox stores it, but no touch on
+  the playing screen triggers it yet.
+- **Set Rating.** It isn't shown, because SlopBox has no runtime database yet
+  (Rockbox hides it in that case too).
+- **Open With.** Rockbox lists its viewer plugins. SlopBox hands the file to
+  another Android app through the system chooser.
+- **Open Plugin.** SlopBox has no plugins, so this item only says so.
+- **Not offered.** PictureFlow, Set as Backdrop, Add to Shortcuts, and
+  Set As › Database Directory or Recording Directory. Rockbox's Show in Files
+  is offered from the playing screen and the database, as in Rockbox.
+- **Folder menu.** The menu button in the file browser's title bar is
+  SlopBox's own. It offers Playing Next on the folder, Paste, Create
+  Directory and Change Music Folder, so an empty folder can still be pasted
+  into. Rockbox shows Paste and Create Directory only in an item's context
+  menu (SlopBox does too).
+- **File operations.** They go through Android's storage framework. Moving
+  tries a direct move first and then copy and delete, as Rockbox tries rename
+  first. There's no "Copying..." or "Deleting..." progress and no way to
+  cancel. A failure shows "Paste Failed" (and so on) without Rockbox's error
+  number.
+- **Names.** Rename and Create Directory use a text field rather than
+  Rockbox's on-screen keyboard.
+- **Properties.** Selecting a line doesn't open it full screen. For a folder,
+  the "[Show Track Info]" line (the number of audio files) doesn't open
+  Rockbox's combined track info.
+- **Track info.** Fields can't be opened full screen. ReplayGain is shown in
+  dB worked out from the gain Rockbox's parser stores, so the last digit can
+  differ from the tag's text.
+- **Pitch screen.** It has the touchscreen layout of Rockbox's pitch screen
+  plugin. A held cell repeats after 0.5 s and then every 0.1 s, which may
+  differ from Rockbox's touchscreen timing. It has no voice. Pitch and speed
+  are kept like Rockbox's resume pitch and speed and restored when SlopBox
+  starts.
+- **Start Directory.** "Set As... › Start Directory" takes effect the next
+  time SlopBox starts, which is Rockbox's equivalent of booting.
 
 ## Database and tags
 

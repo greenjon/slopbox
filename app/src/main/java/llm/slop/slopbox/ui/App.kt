@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.media3.common.MediaItem
 import androidx.media3.session.MediaController
 
-enum class Screen { MainMenu, Browser, Database, NowPlaying, Playlist, QuickScreen, ContextMenu, TrackInfo, Sound, Settings, Bookmarks, BookmarkList, Playlists, CurrentPlaylist, AddToPlaylist }
+enum class Screen { MainMenu, Browser, Database, NowPlaying, Playlist, QuickScreen, ContextMenu, TrackInfo, Sound, Settings, Bookmarks, BookmarkList, Playlists, CurrentPlaylist, AddToPlaylist, SettingsAt, AlbumArt, Cuesheet, Pitch }
 
 /** Screen stack. Rockbox's main menu is always at the bottom. */
 class Nav {
@@ -79,12 +79,12 @@ fun SlopApp(
             when (nav.top) {
                 Screen.MainMenu -> MainMenu(controller, nav)
                 Screen.Browser -> BrowserScreen(controller, nav, browser, pickRoot)
-                Screen.Database -> DatabaseScreen(controller, nav, database)
+                Screen.Database -> DatabaseScreen(controller, nav, database, browser)
                 Screen.Settings -> SettingsTreeScreen(nav, pickRoot)
                 Screen.NowPlaying -> NowPlayingScreen(controller, nav)
                 Screen.Playlist -> PlaylistScreen(controller, nav)
                 Screen.QuickScreen -> QuickScreen(controller, nav)
-                Screen.ContextMenu -> WpsContextMenu(nav)
+                Screen.ContextMenu -> WpsContextMenu(controller, nav, browser)
                 Screen.TrackInfo -> TrackInfoScreen(controller, nav)
                 Screen.Sound -> SettingsTreeScreen(nav, pickRoot, startAt = "Sound Settings")
                 Screen.Bookmarks -> BookmarksMenu(controller, nav)
@@ -92,6 +92,10 @@ fun SlopApp(
                 Screen.Playlists -> CatalogScreen(controller, nav)
                 Screen.CurrentPlaylist -> CurrentPlaylistMenu(controller, nav)
                 Screen.AddToPlaylist -> AddToPlaylistScreen(nav)
+                Screen.SettingsAt -> SettingsTreeScreen(nav, pickRoot, startAt = SettingsView.startAt)
+                Screen.AlbumArt -> AlbumArtScreen(controller, nav)
+                Screen.Cuesheet -> CuesheetScreen(controller, nav)
+                Screen.Pitch -> PitchScreen(nav)
             }
         }
     }

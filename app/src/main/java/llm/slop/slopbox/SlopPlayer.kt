@@ -122,6 +122,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
 
     init {
         current = this
+        Pitch.onChange = { handler.post { invalidateState() } }
         store.addListener(settingsListener)
         if (setting("play log") != 0) memory.startLog()
         restorePlaylist()
@@ -692,6 +693,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             .setAvailableCommands(commands)
             .setPlayWhenReady(playWhenReady, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
             .setPlaybackState(playbackState)
+            // Rockbox pitch x timestretch: how fast the track's time runs.
+            .setPlaybackParameters(androidx.media3.common.PlaybackParameters(
+                Pitch.getSpeed(Pitch.pitch, Pitch.stretch) / Pitch.P100.toFloat()))
             .setPlaylist(playlist)
             .setShuffleModeEnabled(shuffled)
             .setRepeatMode(when (repeat) {
@@ -761,7 +765,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     }
 
     override fun handleRelease(): ListenableFuture<*> {
-        if (current === this) current = null
+        if (current === this) { current = null; Pitch.onChange = null }
         savePlaylist()
         if (engineActive) trackFinished(entries.getOrNull(index), position, autoSkip = false)
         folderJob?.cancel()
@@ -1062,7 +1066,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         val e = entries.getOrNull(index) ?: return null
         val natural = if (shuffled) original.indexOfFirst { it === e }.coerceAtLeast(0) else index
         return Bookmarks.format(natural, position, 0, repeat, shuffled,
-            Bookmarks.SPEED_100, Bookmarks.SPEED_100, playlist, fileName(e))
+            Pitch.pitch.toLong(), Pitch.stretch.toLong(), playlist, fileName(e))
     }
 
     /** Rockbox write_bookmark(); the "Create Bookmark" menu item writes the file. */
@@ -1102,6 +1106,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     fun playBookmark(line: String) {
         val bm = Bookmarks.parse(line) ?: return
         val tree = llm.slop.slopbox.ui.MusicTree.root(context) ?: return
+        // Rockbox bookmark_play(): the bookmark's pitch and speed, when it has them.
+        bm.pitch?.let { Pitch.setPitch(it) }
+        bm.speed?.let { Pitch.setStretch(it) }
         val dirId = Bookmarks.dirDocId(tree, bm.playlist)
         folderJob?.cancel()
         holdStart = true
@@ -1303,6 +1310,17 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     /** The cuesheet of the track being heard, when Cuesheet Support is on. */
     private val currentCue: Cuesheet?
         get() = if (setting("cuesheet support") != 0) entries.getOrNull(index)?.cue else null
+
+    /** For the WPS context menu's "Browse Cuesheet" (Rockbox browse_cuesheet()). */
+    val cuesheet: Cuesheet? get() = currentCue
+
+    /** Rockbox browse_cuesheet(): jump to a cue track of the playing file. */
+    fun seekToCue(ms: Long) {
+        if (entries.isEmpty()) return
+        PowerMgmt.userActivity()
+        seekWithin(ms)
+        invalidateState()
+    }
 
     /** What the skin shows for a cue track: its title and performer, the sheet as album. */
     private fun cueMetadata(e: Entry, base: MediaMetadata): MediaMetadata {

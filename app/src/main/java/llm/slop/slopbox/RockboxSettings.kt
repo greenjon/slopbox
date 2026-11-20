@@ -44,6 +44,8 @@ class RbSetting(
     val tableValues: List<Int>?,
 ) {
     val isCustom get() = kind == "custom"
+    /** Kept as text in config.cfg: custom settings and Rockbox's string settings (F_T_CHARPTR/UCHARPTR). */
+    val isText get() = isCustom || (flags and RbFlags.F_T_MASK).let { it == 4L || it == 5L }
     fun has(flag: Long) = flags and flag != 0L
 
     fun label(value: Int): String =
@@ -80,6 +82,8 @@ class RbMenuItem(
     val function: String?,
     val param: String?,
     val items: List<RbMenuItem>,
+    /** Rockbox's dynamic-text callback for function items (e.g. "wps_context_menu_get_name"). */
+    val textFn: String? = null,
 ) {
     companion object {
         const val MT_MENU = 0
@@ -172,6 +176,7 @@ class RbCatalog(
                 function = o.optString("function").takeIf { o.has("function") && !o.isNull("function") },
                 param = o.optString("param").takeIf { o.has("param") },
                 items = items,
+                textFn = o.optString("text_fn").takeIf { o.has("text_fn") && !o.isNull("text_fn") },
             )
         }
 
@@ -270,7 +275,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
                 SAVE_THEME -> if (!s.has(RbFlags.F_THEMESETTING)) continue
                 SAVE_EQ -> if (!s.has(RbFlags.F_EQSETTING)) continue
             }
-            val value = if (s.isCustom) text(s) else s.toCfg(int(s))
+            val value = if (s.isText) text(s) else s.toCfg(int(s))
             if (value.isEmpty()) continue
             sb.append(cfg).append(": ").append(value).append("\r\n")
         }
@@ -287,8 +292,8 @@ class SettingsStore private constructor(private val context: Context, val catalo
             val name = line.substring(0, colon).trim()
             val value = line.substring(colon + 1).trim()
             val s = catalog.byCfg[name] ?: continue
-            if (s.isCustom) {
-                texts[name] = value
+            if (s.isText) {
+                if (value == s.defaultText) texts.remove(name) else texts[name] = value
             } else {
                 val v = s.fromCfg(value) ?: continue
                 if (v == s.defaultInt) ints.remove(name) else ints[name] = v
@@ -387,6 +392,8 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "playlist viewer track display", "recursive directory insert",
             "warn when erasing dynamic playlist", "keep current track when replacing playlist",
             "show shuffled adding options", "show queue options",
+            "context_wps", "Semitone pitch change", "Timestretch mode",
+            "start directory", "playlist catalog directory",
         )
 
         @Volatile private var instance: SettingsStore? = null

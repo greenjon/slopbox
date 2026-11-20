@@ -30,7 +30,7 @@ object PlaylistFiles {
     /** "/Music/x.m3u8" for a document id like "primary:Music/x.m3u8". */
     fun pathOf(docId: String) = "/" + docId.substringAfter(':').trim('/')
 
-    private fun docIdOf(tree: Uri, path: String) = volume(tree) + ":" + path.trim('/')
+    fun docIdOf(tree: Uri, path: String) = volume(tree) + ":" + path.trim('/')
 
     /**
      * Rockbox add_indices_to_playlist() + format_track_path(): one track per
@@ -88,16 +88,28 @@ object PlaylistFiles {
     fun writable(ctx: Context, tree: Uri): Boolean =
         ctx.contentResolver.persistedUriPermissions.any { it.uri == tree && it.isWritePermission }
 
+    /**
+     * Rockbox "playlist catalog directory" when it was set (Set As... ›
+     * Playlist Directory), else the default: Playlists/ in the music folder.
+     */
+    fun customCatalog(ctx: Context): String? {
+        val st = SettingsStore.get(ctx)
+        val s = st.catalog.byCfg["playlist catalog directory"] ?: return null
+        val v = st.text(s)
+        return v.takeIf { it.isNotBlank() && it != s.defaultText && it.trim('/').isNotEmpty() }
+    }
+
     /** The catalog folder's document id, creating it if allowed. */
     fun catalogDir(ctx: Context, tree: Uri, create: Boolean): String? {
         val root = MusicTree.rootId(tree)
-        val id = root.trimEnd('/') + "/" + CATALOG_DIR
+        val custom = customCatalog(ctx)
+        val id = if (custom != null) docIdOf(tree, custom.trimEnd('/')) else root.trimEnd('/') + "/" + CATALOG_DIR
         val exists = runCatching {
             ctx.contentResolver.query(MusicTree.docUri(tree, id), arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID),
                 null, null, null)?.use { it.count > 0 } ?: false
         }.getOrDefault(false)
         if (exists) return id
-        if (!create || !writable(ctx, tree)) return null
+        if (custom != null || !create || !writable(ctx, tree)) return null
         return runCatching {
             DocumentsContract.createDocument(ctx.contentResolver, MusicTree.docUri(tree, root),
                 DocumentsContract.Document.MIME_TYPE_DIR, CATALOG_DIR)

@@ -40,8 +40,17 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
     val cat = store.catalog
     val stack = remember {
         val root = cat.menu
-        val start = startAt?.let { name -> root.items.firstOrNull { it.isMenu && it.text == name } }
-        mutableStateListOf<Page>(Page.Menu(start ?: root))
+        // The path from the root to the submenu titled [startAt] (searched depth first).
+        fun find(m: RbMenuItem, name: String): List<RbMenuItem>? {
+            for (c in m.items) if (c.isMenu) {
+                if (c.text == name) return listOf(c)
+                find(c, name)?.let { return listOf(c) + it }
+            }
+            return null
+        }
+        val path = startAt?.let { find(root, it) }
+        if (path == null) mutableStateListOf<Page>(Page.Menu(root))
+        else mutableStateListOf<Page>(Page.Menu(path.last()))
     }
     var revision by remember { mutableIntStateOf(0) }
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
@@ -115,9 +124,20 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                 }
             "dirs_to_scan" -> pickRoot()
             "toggle_sleeptimer" -> llm.slop.slopbox.PowerMgmt.toggleSleepTimer()
+            // General Settings › While Playing Screen
+            "reset_wps_items" -> { WpsContext.reset(store); toast(item.text) }
+            // General Settings › File View: "Start File Browser at /"
+            "clear_start_directory" -> {
+                cat.byCfg["start directory"]?.let { store.setText(it, "/") }
+                toast(cat.str("LANG_RESET_DONE_CLEAR"))
+            }
             else -> message = "${item.text}: not available in SlopBox yet."
         }
     }
+
+    /** Rockbox wps_context_menu_do_setting(): the "While Playing Screen" items. */
+    fun contextItem(item: RbMenuItem): Int? =
+        if (item.textFn == "wps_context_menu_get_name") item.param?.removePrefix("?")?.toIntOrNull() ?: 0 else null
 
     fun openSetting(item: RbMenuItem) {
         val s = cat.settings.getOrNull(item.setting) ?: return
@@ -159,19 +179,25 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
 
     val page = stack.last()
     Column(Modifier.fillMaxSize()) {
-        TitleBar(page.title, onBack = ::back)
+        TitleBar(if (page is Page.ContextItem) cat.str("LANG_ONPLAY_MENU_TITLE") else page.title, onBack = ::back)
         when (page) {
             is Page.Menu -> LazyColumn(Modifier.fillMaxSize()) {
                 items(page.item.items) { item ->
                     val setting = cat.settings.getOrNull(item.setting)
+                    val ctxItem = contextItem(item)
                     RockRow(
-                        if (item.function == "toggle_sleeptimer") sleepTimerLabel(cat, store, clock) else item.text,
+                        when {
+                            item.function == "toggle_sleeptimer" -> sleepTimerLabel(cat, store, clock)
+                            ctxItem != null -> { @Suppress("UNUSED_EXPRESSION") revision; WpsContext.label(store, ctxItem) }
+                            else -> item.text
+                        },
                         icon = if (item.isMenu) G.Config else G.Cursor,
                         dim = item.isSetting && setting != null && !store.isLive(setting),
                     ) {
                         when {
                             item.isMenu -> stack += Page.Menu(item)
                             item.isSetting -> openSetting(item)
+                            ctxItem != null -> stack += Page.ContextItem(ctxItem)
                             else -> runFunction(item)
                         }
                     }
@@ -188,6 +214,15 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                             page.onPick(value)
                             back()
                         }
+                    }
+                }
+            }
+            is Page.ContextItem -> {
+                // Rockbox hotkey_run_menu(HOTKEY_FLAG_WPS, execute = false): pick the action.
+                val cur = WpsContext.items(store)[page.item]
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(Hotkey.entries.filter { it.wps }) { hk ->
+                        RockRow(cat.str(hk.lang), selected = hk == cur) { WpsContext.set(store, page.item, hk); back() }
                     }
                 }
             }
@@ -259,6 +294,7 @@ private sealed interface Page {
         val note: String? = null,
     ) : Page
     data class SimpleEq(override val title: String) : Page
+    data class ContextItem(val item: Int) : Page { override val title get() = "" }
     data class AdvancedEq(override val title: String) : Page
 }
 

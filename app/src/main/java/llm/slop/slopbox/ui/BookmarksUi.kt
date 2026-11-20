@@ -42,7 +42,7 @@ fun bookmarkPlaylistOf(c: MediaController?): String? {
 @Composable
 fun BookmarksMenu(controller: MediaController?, nav: Nav) {
     val ctx = LocalContext.current
-    val playlist = bookmarkPlaylistOf(controller)
+    val playlist = llm.slop.slopbox.SlopPlayer.current?.bookmarkPlaylist ?: bookmarkPlaylistOf(controller)
     Column(Modifier.fillMaxSize()) {
         TitleBar(str(ctx, "LANG_BOOKMARK_MENU"), onBack = { nav.pop() })
         RockRow(str(ctx, "LANG_BOOKMARK_MENU_CREATE"), icon = G.Cursor, enabled = playlist != null) {

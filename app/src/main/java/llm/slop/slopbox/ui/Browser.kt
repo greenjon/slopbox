@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -33,6 +34,8 @@ class BrowserState {
     /** Last line picked in each folder, so coming back puts the selector on it. */
     val cursor = mutableStateMapOf<String, String>()
     val scroll = HashMap<String, Pair<Int, Int>>()
+    /** Bumped after a file operation so the shown folder is listed again. */
+    var reload by mutableIntStateOf(0)
 
     fun open(ctx: Context, tree: Uri?) {
         this.tree = tree
@@ -42,7 +45,38 @@ class BrowserState {
         if (tree != null) {
             val id = MusicTree.rootId(tree)
             path += Doc(id, rootName(ctx, tree, id), isDir = true)
+            // Rockbox "Start Directory" (Set As... › Start Directory).
+            val start = llm.slop.slopbox.SettingsStore.get(ctx).let { st ->
+                st.catalog.byCfg["start directory"]?.let { st.text(it) } }
+            if (start != null && start.trim('/').isNotEmpty()) {
+                descend(llm.slop.slopbox.PlaylistFiles.docIdOf(tree, start.trimEnd('/')), includeLast = true)
+            }
         }
+    }
+
+    /** Open the folders from the root down to [id] (and [id] itself if [includeLast]). */
+    private fun descend(id: String, includeLast: Boolean): Boolean {
+        val root = path.firstOrNull() ?: return false
+        val prefix = if (root.id.endsWith(":")) root.id else root.id + "/"
+        if (!id.startsWith(prefix)) return false
+        val segs = id.removePrefix(prefix).split('/').filter { it.isNotEmpty() }
+        val dirs = if (includeLast) segs else segs.dropLast(1)
+        while (path.size > 1) path.removeAt(path.lastIndex)
+        var cur = prefix.removeSuffix("/")
+        for (seg in dirs) {
+            cur = if (cur.endsWith(":")) cur + seg else "$cur/$seg"
+            path += Doc(cur, seg, isDir = true)
+        }
+        return true
+    }
+
+    /** Rockbox reveal() / "Show in Files": open the file's folder with the file selected. */
+    fun reveal(ctx: Context, tree: Uri, fileId: String): Boolean {
+        if (this.tree != tree) open(ctx, tree)
+        if (!descend(fileId, includeLast = false)) return false
+        cursor[path.last().id] = fileId
+        scroll.remove(path.last().id)
+        return true
     }
 
     private fun rootName(ctx: Context, tree: Uri, id: String): String = runCatching {
@@ -76,7 +110,7 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
 
     val dir = state.path.last()
     var entries by remember(dir.id) { mutableStateOf<List<Doc>?>(null) }
-    LaunchedEffect(tree, dir.id) { entries = MusicTree.list(ctx, tree, dir.id) }
+    LaunchedEffect(tree, dir.id, state.reload) { entries = MusicTree.list(ctx, tree, dir.id) }
 
     BackHandler(enabled = menu == null && state.path.size > 1) { state.path.removeAt(state.path.lastIndex) }
     BackHandler(enabled = menu != null) { menu = null }
@@ -99,27 +133,18 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
     menu?.let { m ->
         when (m) {
             is BrowserMenu.ForItem -> {
-                // Rockbox's context menu for a file or folder.
                 val d = m.doc
-                val cat = llm.slop.slopbox.SettingsStore.get(ctx).catalog
-                Column(Modifier.fillMaxSize()) {
-                    TitleBar(if (d.isDir) d.name else d.name.substringBeforeLast('.'), onBack = { menu = null })
-                    RockRow(cat.str("LANG_PLAYING_NEXT"), icon = G.Cursor) { menu = BrowserMenu.PlayingNext(d) }
-                    RockRow(cat.str("LANG_ADD_TO_PL"), icon = G.Cursor) {
+                TreeContextMenu(
+                    tree, dir, d, TreeKind.FILES, nav,
+                    onClose = { changed -> menu = null; if (changed) state.reload++ },
+                    onView = {
+                        // Rockbox view_playlist(): the playlist viewer on that file.
                         menu = null
-                        scope.launch {
-                            val items = when {
-                                d.isPlaylist -> llm.slop.slopbox.PlaylistFiles.load(ctx, tree, d.id, d.name)
-                                d.isDir -> MusicTree.walk(ctx, tree, d).map { (f, fd) -> MusicTree.item(tree, f, fd) }
-                                else -> listOf(MusicTree.item(tree, d, dir))
-                            }
-                            PlaylistsView.addPaths = items.mapNotNull { it.requestMetadata.mediaUri }
-                                .map { llm.slop.slopbox.PlaybackMemory.pathOf(it) }
-                            PlaylistsView.addTitle = d.name.substringBeforeLast('.')
-                            nav.push(Screen.AddToPlaylist)
-                        }
-                    }
-                }
+                        PlaylistsView.viewFile = d
+                        nav.push(Screen.Playlists)
+                    },
+                    onPlayingNext = { menu = BrowserMenu.PlayingNext(d) },
+                )
             }
             is BrowserMenu.PlayingNext -> {
                 val d = m.doc
@@ -144,8 +169,8 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
                 }
             }
             BrowserMenu.ForFolder -> BrowserMenuScreen(
-                dir,
-                onClose = { menu = null },
+                tree, dir,
+                onClose = { changed -> menu = null; if (changed) state.reload++ },
                 onChangeRoot = { menu = null; pickRoot() },
                 onPlayingNext = { menu = BrowserMenu.PlayingNext(dir) },
             )
@@ -216,17 +241,57 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
     }
 }
 
+/**
+ * The menu for the folder being shown (SlopBox's; Rockbox reaches these from
+ * any item's context menu): Playing Next on the folder, Paste and Create
+ * Directory here, and changing the music folder.
+ */
 @Composable
 private fun BrowserMenuScreen(
+    tree: Uri,
     dir: Doc,
-    onClose: () -> Unit,
+    onClose: (changed: Boolean) -> Unit,
     onChangeRoot: () -> Unit,
     onPlayingNext: () -> Unit,
 ) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val cat = llm.slop.slopbox.SettingsStore.get(ctx).catalog
+    var naming by remember { mutableStateOf(false) }
+    var overwriteAsk by remember { mutableStateOf(false) }
+    fun failed(op: String) = android.widget.Toast.makeText(ctx, cat.str(op) + " " + cat.str("LANG_FAILED"),
+        android.widget.Toast.LENGTH_SHORT).show()
+    fun paste(overwrite: Boolean) = scope.launch {
+        if (!llm.slop.slopbox.FileOps.paste(ctx, tree, dir.id, overwrite)) failed("LANG_PASTE")
+        onClose(true)
+    }
+    if (naming) {
+        NameEntry(cat.str("LANG_CREATE_DIR"), "") { n ->
+            naming = false
+            if (n != null) {
+                if (llm.slop.slopbox.FileOps.mkdir(ctx, tree, dir.id, n) == null) failed("LANG_CREATE_DIR")
+                onClose(true)
+            }
+        }
+        return
+    }
+    if (overwriteAsk) {
+        YesNo(cat.str("LANG_REALLY_OVERWRITE")) { yes -> overwriteAsk = false; if (yes) paste(true) else onClose(false) }
+        return
+    }
+    val clip = llm.slop.slopbox.FileOps.Clipboard.doc
     Column(Modifier.fillMaxSize()) {
-        TitleBar(dir.name, onBack = onClose)
-        RockRow(llm.slop.slopbox.SettingsStore.get(ctx).catalog.str("LANG_PLAYING_NEXT"), icon = G.Cursor, onClick = onPlayingNext)
+        TitleBar(dir.name, onBack = { onClose(false) })
+        RockRow(cat.str("LANG_PLAYING_NEXT"), icon = G.Cursor, onClick = onPlayingNext)
+        if (clip != null) RockRow(cat.str("LANG_PASTE"), icon = G.Cursor) {
+            scope.launch {
+                val exists = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    llm.slop.slopbox.FileOps.exists(ctx, tree, dir.id, clip.name)
+                }
+                if (exists && llm.slop.slopbox.FileOps.Clipboard.parentId != dir.id) overwriteAsk = true else paste(false)
+            }
+        }
+        RockRow(cat.str("LANG_CREATE_DIR"), icon = G.Cursor) { naming = true }
         RockRow("Change music folder", icon = G.TangoFolder, onClick = onChangeRoot)
     }
 }

@@ -40,6 +40,8 @@ object PlaylistsView {
     /** Tracks for "Add to Playlist...": storage paths. */
     var addPaths by mutableStateOf<List<String>>(emptyList())
     var addTitle by mutableStateOf("")
+    /** A playlist file to open in the viewer when the Playlists screen opens (Rockbox view_playlist()). */
+    var viewFile by mutableStateOf<Doc?>(null)
 }
 
 private fun str(ctx: android.content.Context, id: String) = SettingsStore.get(ctx).catalog.str(id)
@@ -54,20 +56,29 @@ fun CatalogScreen(controller: MediaController?, nav: Nav) {
     var rev by remember { mutableIntStateOf(0) }
     var list by remember { mutableStateOf<List<Doc>?>(null) }
     var options by remember { mutableStateOf(false) }
-    var viewing by remember { mutableStateOf<Doc?>(null) }
+    // Opened from a file's "View" (Rockbox view_playlist()): straight to that playlist.
+    val external = remember { PlaylistsView.viewFile.also { PlaylistsView.viewFile = null } }
+    var viewing by remember { mutableStateOf(external) }
     var menuFor by remember { mutableStateOf<Doc?>(null) }
+    var playingNextFor by remember { mutableStateOf<Doc?>(null) }
     var saving by remember { mutableStateOf(false) }
+    var creating by remember { mutableStateOf(false) }
     LaunchedEffect(tree, rev) {
         list = if (tree == null) emptyList() else withContext(Dispatchers.IO) { PlaylistFiles.catalog(ctx, tree).map { it.first } }
     }
-    BackHandler(enabled = options || viewing != null || menuFor != null || saving) {
-        options = false; viewing = null; menuFor = null; saving = false
+    BackHandler(enabled = options || viewing != null || menuFor != null || playingNextFor != null || saving || creating) {
+        if (external != null && viewing == external) nav.pop()
+        options = false; viewing = null; menuFor = null; playingNextFor = null; saving = false; creating = false
     }
     if (saving) { SavePlaylistScreen(onDone = { saving = false; rev++ }); return }
-    viewing?.let { doc -> if (tree != null) PlaylistFileScreen(controller, nav, tree, doc) { viewing = null }; return }
-    menuFor?.let { doc ->
-        PlayingNextMenu(doc.name.substringBeforeLast('.'), folderLike = true, recursable = false, onBack = { menuFor = null }) { choice, _ ->
-            menuFor = null
+    if (creating) { CreatePlaylistScreen(onDone = { creating = false; rev++ }); return }
+    viewing?.let { doc ->
+        if (tree != null) PlaylistFileScreen(controller, nav, tree, doc) { if (doc == external) nav.pop() else viewing = null }
+        return
+    }
+    playingNextFor?.let { doc ->
+        PlayingNextMenu(doc.name.substringBeforeLast('.'), folderLike = true, recursable = false, onBack = { playingNextFor = null }) { choice, _ ->
+            playingNextFor = null
             scope.launch {
                 val items = PlaylistFiles.load(ctx, tree!!, doc.id, doc.name)
                 SlopPlayer.current?.addToPlaylist(items, choice.position, choice.queue, choice.replace)
@@ -76,13 +87,29 @@ fun CatalogScreen(controller: MediaController?, nav: Nav) {
         }
         return
     }
+    menuFor?.let { doc ->
+        val dirId = PlaylistFiles.catalogDir(ctx, tree!!, create = false) ?: doc.id.substringBeforeLast('/')
+        TreeContextMenu(tree, Doc(dirId, PlaylistFiles.CATALOG_DIR, true), doc, TreeKind.CATALOG, nav,
+            onClose = { changed -> menuFor = null; if (changed) rev++ },
+            onView = { menuFor = null; viewing = doc },
+            onPlayingNext = { menuFor = null; playingNextFor = doc })
+        return
+    }
     if (options) {
-        // Rockbox playlist_options: View Current Playlist, Save Current Playlist.
+        // Rockbox playlist_options: View Current Playlist, Save Current Playlist,
+        // Create Playlist, Reset Playlist Catalogue Directory.
         Column(Modifier.fillMaxSize()) {
             TitleBar(str(ctx, "LANG_PLAYLISTS"), onBack = { options = false })
             RockRow(str(ctx, "LANG_VIEW_DYNAMIC_PLAYLIST"), icon = G.Cursor) { options = false; nav.push(Screen.Playlist) }
             RockRow(str(ctx, "LANG_SAVE_DYNAMIC_PLAYLIST"), icon = G.Cursor, enabled = (controller?.mediaItemCount ?: 0) > 0) {
                 options = false; saving = true
+            }
+            RockRow(str(ctx, "LANG_CREATE_PLAYLIST"), icon = G.Cursor, enabled = tree != null) { options = false; creating = true }
+            RockRow(str(ctx, "LANG_RESET_PLAYLISTCAT_DIR"), icon = G.TangoFolder) {
+                val st = SettingsStore.get(ctx)
+                st.catalog.byCfg["playlist catalog directory"]?.let { st.setText(it, it.defaultText ?: "") }
+                toast(ctx, str(ctx, "LANG_RESET_DONE_CLEAR"))
+                options = false; rev++
             }
         }
         return
@@ -184,6 +211,35 @@ fun SavePlaylistScreen(onDone: () -> Unit) {
     }
 }
 
+/**
+ * Rockbox create_playlist() (tree.c): every track in the music folder, in
+ * browser order, into a new catalog playlist named by the user.
+ */
+@Composable
+private fun CreatePlaylistScreen(onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val tree = MusicTree.root(ctx) ?: run { onDone(); return }
+    var working by remember { mutableStateOf(false) }
+    if (working) {
+        Column(Modifier.fillMaxSize()) { TitleBar(str(ctx, "LANG_CREATE_PLAYLIST"), onBack = null); ListNote(str(ctx, "LANG_WAIT")) }
+        return
+    }
+    NameEntry(str(ctx, "LANG_CATALOG_ADD_TO_NEW"), "") { name ->
+        if (name == null) { onDone(); return@NameEntry }
+        working = true
+        scope.launch {
+            val root = Doc(MusicTree.rootId(tree), "/", true)
+            val paths = MusicTree.walk(ctx, tree, root, limit = Int.MAX_VALUE).map { (f, _) -> PlaylistFiles.pathOf(f.id) }
+            val t = withContext(Dispatchers.IO) { PlaylistFiles.create(ctx, tree, name) }
+            val ok = t != null && withContext(Dispatchers.IO) { PlaylistFiles.write(ctx, t.first, "$name.m3u8", paths) }
+            toast(ctx, if (ok) str(ctx, "LANG_PLAYLIST_INSERT_COUNT").replace("%d", paths.size.toString()).replace("%s", "")
+                else "Can't write the playlist: choose the music folder again to allow writing.")
+            onDone()
+        }
+    }
+}
+
 /** Rockbox "Add to Playlist...": Add to Existing Playlist / Add to New Playlist. */
 @Composable
 fun AddToPlaylistScreen(nav: Nav) {
@@ -239,15 +295,65 @@ fun CurrentPlaylistMenu(controller: MediaController?, nav: Nav) {
     val ctx = LocalContext.current
     var saving by remember { mutableStateOf(false) }
     var timing by remember { mutableStateOf(false) }
-    BackHandler(enabled = saving || timing) { saving = false; timing = false }
+    var searching by remember { mutableStateOf(false) }
+    var confirmShuffle by remember { mutableStateOf(false) }
+    BackHandler(enabled = saving || timing || searching) { saving = false; timing = false; searching = false }
     if (saving) { SavePlaylistScreen(onDone = { saving = false }); return }
     if (timing) { PlayingTimeScreen(controller) { timing = false }; return }
+    if (searching) { SearchPlaylistScreen(controller, nav) { searching = false }; return }
+    if (confirmShuffle) {
+        // Rockbox shuffle_playlist(): yesno_pop_confirm(LANG_SHUFFLE).
+        YesNo(str(ctx, "LANG_SHUFFLE"), listOf(str(ctx, "LANG_ARE_YOU_SURE"))) { yes ->
+            confirmShuffle = false
+            if (yes) { SlopPlayer.current?.reshuffle(); nav.pop() }
+        }
+        return
+    }
     Column(Modifier.fillMaxSize()) {
         TitleBar(str(ctx, "LANG_CURRENT_PLAYLIST"), onBack = { nav.pop() })
         RockRow(str(ctx, "LANG_VIEW_DYNAMIC_PLAYLIST"), icon = G.Cursor) { nav.pop(); nav.push(Screen.Playlist) }
+        RockRow(str(ctx, "LANG_SEARCH_IN_PLAYLIST"), icon = G.Cursor) { searching = true }
         RockRow(str(ctx, "LANG_SAVE_DYNAMIC_PLAYLIST"), icon = G.Cursor) { saving = true }
-        RockRow(str(ctx, "LANG_SHUFFLE_PLAYLIST"), icon = G.Cursor) { SlopPlayer.current?.reshuffle(); nav.pop() }
+        RockRow(str(ctx, "LANG_SHUFFLE_PLAYLIST"), icon = G.Cursor) { confirmShuffle = true }
         RockRow(str(ctx, "LANG_PLAYING_TIME"), icon = G.Cursor) { timing = true }
+    }
+}
+
+/**
+ * Rockbox search_playlist(): case-insensitive match on the file name (or the
+ * whole path when the viewer shows full paths); picking a result plays it.
+ */
+@Composable
+private fun SearchPlaylistScreen(controller: MediaController?, nav: Nav, onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    var query by remember { mutableStateOf<String?>(null) }
+    val q = query
+    if (q == null) {
+        NameEntry(str(ctx, "LANG_SEARCH_IN_PLAYLIST"), "") { s -> if (s == null) onBack() else query = s }
+        return
+    }
+    val c = controller
+    val fullPath = SettingsStore.get(ctx).int("playlist viewer track display") == 1
+    val found = remember(q) {
+        if (c == null) emptyList() else (0 until c.mediaItemCount).filter { i ->
+            val path = c.getMediaItemAt(i).requestMetadata.mediaUri?.let { PlaybackMemory.pathOf(it) } ?: ""
+            val name = if (fullPath) path else path.substringAfterLast('/')
+            name.contains(q, ignoreCase = true)
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        TitleBar(str(ctx, "LANG_SEARCH_RESULTS"), onBack = onBack)
+        ListNote(str(ctx, "LANG_PLAYLIST_SEARCH_MSG").replace("%d", found.size.toString()).replace(" (%s)", ""))
+        LazyColumn(Modifier.fillMaxSize()) {
+            items(found) { i ->
+                val item = c!!.getMediaItemAt(i)
+                val path = item.requestMetadata.mediaUri?.let { PlaybackMemory.pathOf(it) } ?: item.mediaId
+                RockRow(if (fullPath) path else path.substringAfterLast('/').substringBeforeLast('.'), icon = G.TangoNote) {
+                    c.seekTo(i, 0); c.play()
+                    nav.toNowPlaying()
+                }
+            }
+        }
     }
 }
 

@@ -59,7 +59,13 @@ bookmarks, the sleep timer and Idle Poweroff. Playlists work like Rockbox's
 Play Last, the shuffled and queue variants, per the Current Playlist
 settings), queued tracks that drop out once played, `.m3u`/`.m3u8` files
 (relative paths and Windows-style paths included), the Playlist Catalog in
-`Playlists/`, Save Current Playlist, Add to Playlist, and the playlist viewer.
+`Playlists/`, Save Current Playlist, Add to Playlist, Create Playlist, Search
+in Playlist, and the playlist viewer. The context menus are `onplay.c`'s: the
+playing screen's menu with its configurable items (While Playing Screen
+settings), and the file browser's Rename, Cut, Copy, Paste, Delete, Create
+Directory, Properties, Show Track Info and Set As. The pitch screen is a port
+of Rockbox's pitch screen plugin, with rate, semitone and timestretch modes,
+and its arithmetic is checked against Rockbox's C in the unit tests.
 
 ## Layout
 

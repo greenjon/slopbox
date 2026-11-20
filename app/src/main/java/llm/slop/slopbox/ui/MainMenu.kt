@@ -37,6 +37,9 @@ fun MainMenu(controller: MediaController?, nav: Nav) {
         RockRow(llm.slop.slopbox.SettingsStore.get(ctx).catalog.str("LANG_PLAYLISTS"), icon = G.ListC, selected = cursor == 4) {
             cursor = 4; nav.push(Screen.Playlists)
         }
+        RockRow(llm.slop.slopbox.SettingsStore.get(ctx).catalog.str("LANG_PLUGINS"), icon = G.TangoFolder, selected = cursor == 6) {
+            cursor = 6; nav.push(Screen.Plugins)
+        }
         RockRow(llm.slop.slopbox.SettingsStore.get(ctx).catalog.str("LANG_SHORTCUTS"), icon = G.Cursor, selected = cursor == 5) {
             cursor = 5; nav.push(Screen.Shortcuts)
         }

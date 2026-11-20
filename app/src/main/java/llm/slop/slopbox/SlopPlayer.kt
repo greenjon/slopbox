@@ -1259,6 +1259,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         }
     }
 
+    /** Rockbox playlist_set_modified(NULL, true), e.g. after a plugin builds the playlist. */
+    fun markModified() { playlistModified = true }
+
     /** Rockbox playlist_randomise() from the WPS: Reshuffle. */
     fun reshuffle() {
         applyShuffle(true, keepCurrentFirst = true)

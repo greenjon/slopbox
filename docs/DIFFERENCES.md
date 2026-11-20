@@ -80,8 +80,9 @@ Anything new goes here in the same change that introduces it.
   playlist.
 - **Auto-Change Directory.** Android grants only the chosen music folder, so
   folder changes always stay inside it. "Constrain Auto-Change" therefore has
-  no further effect. "Random" picks from a folder list built on the fly;
-  Rockbox needs `folder_advance_list.dat` from a plugin. A "folder playlist"
+  no further effect. "Random" picks from `folder_advance_list.dat`, made by
+  the Random Folder Advance plugin, as in Rockbox; without it, it moves to
+  the next folder. A "folder playlist"
   means every track came from the same folder (Rockbox's `dirplay` flag).
 - **FF/RW.** The acceleration follows Rockbox's `ffwd_rew()`, but steps
   repeat every 150 ms of holding (the UI's rate), not at Rockbox's button
@@ -235,6 +236,18 @@ Anything new goes here in the same change that introduces it.
   `comment` and `grouping` are written empty because SlopBox's database
   doesn't keep them, `lastoffset` is 0, and `lastelapsed` comes from
   SlopBox's Automatic Resume points (and goes back into them on import).
+
+## Plugins
+
+- **Plugins are ports.** Rockbox plugins are C programs written against
+  Rockbox's plugin API and screen. SlopBox ports them one by one in Kotlin
+  (Plugins › apps, …) and keeps their files and formats. Only music-related
+  plugins are ported.
+- **Random Folder Advance.** `folder_advance_list.dat` is kept in SlopBox's
+  own storage in Rockbox's binary format. The text files it exports and
+  imports (`folder_advance_list.txt`) and the optional
+  `folder_advance_dir.txt` sit at the top of the music folder, not in
+  `/.rockbox/`. Scanning covers the music folder rather than the whole disk.
 
 ## Interface
 

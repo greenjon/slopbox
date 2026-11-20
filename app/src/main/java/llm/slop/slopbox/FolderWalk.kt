@@ -9,7 +9,7 @@ import llm.slop.slopbox.ui.MusicTree
 /**
  * Rockbox "Auto-Change Directory" (apps/playlist.c get_next_dir()): find the
  * next folder, in file browser order, that has music in it -- or the previous
- * one, or a random one -- and its tracks.
+ * one, or a random one from the Random Folder Advance list -- and its tracks.
  *
  * The walk is limited to the chosen music folder (Android only grants that
  * tree), which is what Rockbox's "Constrain Auto-Change" does with the start
@@ -30,9 +30,16 @@ object FolderWalk {
 
         val withMusic = folders.filter { it.second.isNotEmpty() }
         if (withMusic.isEmpty()) return null
-        val pick: Pair<Doc, List<Doc>> = if (random) {
-            withMusic.filter { it.first.id != currentDir }.randomOrNull() ?: return null
-        } else {
+        // Rockbox: "Random" picks from folder_advance_list.dat (the Random
+        // Folder Advance plugin's list); without one, or if nothing in it has
+        // music, it goes on to the next folder as usual.
+        val randomPick = if (random) {
+            val root = MusicTree.rootId(tree)
+            llm.slop.slopbox.plugins.RandomFolderAdvance.pick(ctx, tree,
+                llm.slop.slopbox.PlaylistFiles.pathOf(root)) { id -> folders.any { it.first.id == id && it.second.isNotEmpty() } }
+                ?.let { path -> folders.firstOrNull { it.first.id == llm.slop.slopbox.PlaylistFiles.docIdOf(tree, path) } }
+        } else null
+        val pick: Pair<Doc, List<Doc>> = if (randomPick != null) randomPick else {
             val at = folders.indexOfFirst { it.first.id == currentDir }
             if (at < 0) return null
             // Search onwards (wrapping) for a folder that has tracks.

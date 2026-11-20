@@ -37,6 +37,14 @@ android {
         }
     }
 
+    buildTypes {
+        debug {
+            // ./gradlew assembleDebug -PappIdSuffix=.ui installs next to the main
+            // debug build, so two lines of work can share one phone.
+            (project.findProperty("appIdSuffix") as String?)?.let { applicationIdSuffix = it }
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

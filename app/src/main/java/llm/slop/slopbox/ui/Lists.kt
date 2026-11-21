@@ -106,10 +106,14 @@ fun RockRow(
     val showIcons = forceIcon || llm.slop.slopbox.SettingsStore.get(ctx).int("show icons") != 0
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val bar = (selected || pressed) && enabled
+    val hit = (selected || pressed) && enabled
+    // Rockbox Line Selector Type: a bar (inverse, solid or gradient), or Pointer (a cursor, no bar).
+    val selBrush = Cabbie.selector
+    val bar = hit && selBrush != null
+    val pointer = hit && selBrush == null
     val color = when {
         !enabled || (dim && !bar) -> Cabbie.Dim
-        bar -> Cabbie.SelText
+        bar -> Cabbie.selectorText
         else -> Cabbie.Text
     }
     Column {
@@ -117,7 +121,7 @@ fun RockRow(
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = 56.dp)
-                .then(if (bar) Modifier.background(Cabbie.selector) else Modifier)
+                .then(if (bar) Modifier.background(selBrush!!) else Modifier)
                 .combinedClickable(
                     interactionSource = source,
                     indication = null,
@@ -129,21 +133,28 @@ fun RockRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (selBrush == null) Box(Modifier.size(width = 18.dp, height = 24.dp)) {
+                if (pointer) Glyph(G.Cursor, Modifier.matchParentSize())
+            }
             if (icon != null && showIcons) Glyph(icon, Modifier.size(32.dp))
             Column(Modifier.weight(1f)) {
                 BasicText(text, style = Cabbie.body.copy(color = color), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (sub != null) {
                     BasicText(
                         sub,
-                        style = Cabbie.small.copy(color = if (bar) Cabbie.SelText else Cabbie.Dim),
+                        style = Cabbie.small.copy(color = if (bar) Cabbie.selectorText else Cabbie.Dim),
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
             if (trailing != null) BasicText(trailing, style = Cabbie.body.copy(color = color), maxLines = 1)
         }
-        // "list separator height..+&touchscreen: auto"
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Cabbie.Separator.copy(alpha = 0.5f)))
+        // Rockbox Line Separator: Auto ("list separator height..+&touchscreen: auto") is 1 dp, Off none.
+        val px = Cabbie.palette.separatorPx
+        if (px != 0) {
+            val h = if (px < 0) 1.dp else with(androidx.compose.ui.platform.LocalDensity.current) { px.toDp() }
+            Box(Modifier.fillMaxWidth().height(h).background(Cabbie.Separator.copy(alpha = if (px < 0) 0.5f else 1f)))
+        }
     }
 }
 

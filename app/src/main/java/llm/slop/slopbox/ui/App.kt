@@ -87,6 +87,25 @@ fun SlopApp(
     pickRoot: () -> Unit,
 ) {
     BackHandler(enabled = nav.stack.size > 1) { nav.pop() }
+    // Dark system bar icons on a light background.
+    val view = androidx.compose.ui.platform.LocalView.current
+    val light = Cabbie.isLight
+    androidx.compose.runtime.LaunchedEffect(light) {
+        val window = (view.context as? android.app.Activity)?.window ?: return@LaunchedEffect
+        androidx.core.view.WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = light
+            isAppearanceLightNavigationBars = light
+        }
+    }
+    // Theme Settings colours: read now and whenever a setting changes.
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val store = llm.slop.slopbox.SettingsStore.get(ctx)
+        Cabbie.apply(store)
+        val l: () -> Unit = { Cabbie.apply(store) }
+        store.addListener(l)
+        onDispose { store.removeListener(l) }
+    }
     Backdrop {
         // Rockbox's Status Bar setting places the mini-player: Off, Top or Bottom.
         val bar = statusBarPlace()

@@ -29,6 +29,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -37,29 +43,81 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
+ * The colours Rockbox's Theme Settings give: foreground, background, line
+ * selector start / end / text, list separator colour and height, and the
+ * line selector type. Read from the settings store by [Cabbie.apply].
+ */
+data class Palette(
+    val fg: Color = Color(0xFFCCCCCC),
+    val bg: Color = Color.Black,
+    val selStart: Color = Color(0xFFFDE89E),
+    val selEnd: Color = Color(0xFFB58C00),
+    val selText: Color = Color.Black,
+    val separator: Color = Color(0xFF808080),
+    /** Rockbox "list separator height": -1 auto, 0 off, else pixels. */
+    val separatorPx: Int = -1,
+    /** Rockbox "selector type": 0 pointer, 1 bar (inverse), 2 bar (solid colour), 3 bar (gradient). */
+    val selectorType: Int = 3,
+) {
+    companion object {
+        val CABBIEV2 = Palette()
+
+        fun from(store: llm.slop.slopbox.SettingsStore): Palette {
+            fun rgb(cfg: String, d: Color) = store.catalog.byCfg[cfg]?.let { Color(0xFF000000.toInt() or store.int(it)) } ?: d
+            val d = CABBIEV2
+            return Palette(
+                fg = rgb("foreground color", d.fg),
+                bg = rgb("background color", d.bg),
+                selStart = rgb("line selector start color", d.selStart),
+                selEnd = rgb("line selector end color", d.selEnd),
+                selText = rgb("line selector text color", d.selText),
+                separator = rgb("list separator color", d.separator),
+                separatorPx = store.catalog.byCfg["list separator height"]?.let { store.int(it) } ?: d.separatorPx,
+                selectorType = store.catalog.byCfg["selector type"]?.let { store.int(it) } ?: d.selectorType,
+            )
+        }
+    }
+}
+
+/**
  * Colours and shapes after Rockbox's cabbiev2 theme (wps/WPSLIST, wps/cabbiev2/,
  * backdrops/cabbiev2.*): grey-to-black backdrop, light grey text, gold
  * gradient line selector, glossy gold controls. Redrawn, not copied bitmaps,
- * so everything scales.
+ * so everything scales. The colours follow Rockbox's Theme Settings
+ * ([Palette]); they are snapshot state, so screens redraw when they change.
  */
 object Cabbie {
-    // "foreground color: CCCCCC", "background color: 000000"
-    val Text = Color(0xFFCCCCCC)
-    val Dim = Color(0xFF8C8C8C)
-    // "line selector start/end color: fde89e / b58c00", "line selector text color: 000000"
-    val SelTop = Color(0xFFFDE89E)
-    val SelBottom = Color(0xFFB58C00)
-    val SelText = Color(0xFF000000)
-    // "list separator color: 808080"
-    val Separator = Color(0xFF808080)
+    var palette by mutableStateOf(Palette.CABBIEV2)
+        private set
+
+    /** Re-read the theme colours from the settings. */
+    fun apply(store: llm.slop.slopbox.SettingsStore) {
+        val p = Palette.from(store)
+        if (p != palette) palette = p
+    }
+
+    val Text get() = palette.fg
+    // cabbiev2's dim grey (8C8C8C) is 69 % of the way from black to CCCCCC.
+    val Dim get() = lerp(palette.bg, palette.fg, 0.69f)
+    val SelTop get() = palette.selStart
+    val SelBottom get() = palette.selEnd
+    val SelText get() = palette.selText
+    val Separator get() = palette.separator
     // The WPS header text colour (%Vf(0F0B00)).
     val HeaderText = Color(0xFF0F0B00)
 
-    val GoldLight = Color(0xFFFFEF8A)
-    val Gold = Color(0xFFF0C400)
-    val GoldDark = Color(0xFFB08600)
-    val Track = Color(0xFF505050)
-    val TrackDark = Color(0xFF2E2E2E)
+    // The glossy controls follow the line selector; cabbiev2's own golds when it's the default.
+    private val cabbieGold get() = palette.selStart == Palette.CABBIEV2.selStart && palette.selEnd == Palette.CABBIEV2.selEnd
+    val GoldLight get() = if (cabbieGold) Color(0xFFFFEF8A) else lerp(palette.selStart, Color.White, 0.15f)
+    val Gold get() = if (cabbieGold) Color(0xFFF0C400) else lerp(palette.selStart, palette.selEnd, 0.5f)
+    val GoldDark get() = if (cabbieGold) Color(0xFFB08600) else palette.selEnd
+    // cabbiev2's greys (505050, 2E2E2E, 6A6A6A, the popup's 4A4A4A) as steps from background to foreground.
+    val Track get() = lerp(palette.bg, palette.fg, 0.39f)
+    val TrackDark get() = lerp(palette.bg, palette.fg, 0.225f)
+    /** Panels drawn over the backdrop: the mini-player, the WPS popup. */
+    val Panel get() = lerp(palette.bg, palette.fg, 0.36f)
+    /** Whether the background is light, for the system bar icons. */
+    val isLight get() = palette.bg.luminance() > 0.5f
 
     // Tango palette, for the list icons (cabbiev2 uses the Tango iconset).
     val TangoBlueLight = Color(0xFF9DBEE6)
@@ -67,18 +125,27 @@ object Cabbie {
     val TangoGreenLight = Color(0xFFB5EE6A)
     val TangoGreen = Color(0xFF4E9A06)
 
-    val backdrop = Brush.verticalGradient(
-        0f to Color(0xFF5C5C5C),
-        0.5f to Color(0xFF242424),
-        1f to Color(0xFF000000),
+    // cabbiev2's backdrop: 5C5C5C at the top to the background colour (black) at the bottom.
+    val backdrop get() = Brush.verticalGradient(
+        0f to lerp(palette.bg, Color.White, 0.36f),
+        0.5f to lerp(palette.bg, Color.White, 0.14f),
+        1f to palette.bg,
     )
-    val selector = Brush.verticalGradient(listOf(SelTop, SelBottom))
-    val gold = Brush.verticalGradient(listOf(GoldLight, Gold, GoldDark))
-    val track = Brush.verticalGradient(listOf(Color(0xFF6A6A6A), Track, TrackDark))
+    /** The line selector for [Palette.selectorType]; null for Pointer (no bar). */
+    val selector: Brush? get() = when (palette.selectorType) {
+        0 -> null
+        1 -> SolidColor(palette.fg)
+        2 -> SolidColor(palette.selStart)
+        else -> Brush.verticalGradient(listOf(SelTop, SelBottom))
+    }
+    /** Text on the selector bar: Inverse uses the background colour. */
+    val selectorText get() = if (palette.selectorType == 1) palette.bg else palette.selText
+    val gold get() = Brush.verticalGradient(listOf(GoldLight, Gold, GoldDark))
+    val track get() = Brush.verticalGradient(listOf(lerp(palette.bg, palette.fg, 0.52f), Track, TrackDark))
 
     val font = FontFamily.SansSerif
-    val body = TextStyle(fontFamily = font, fontSize = 18.sp, color = Text)
-    val small = TextStyle(fontFamily = font, fontSize = 15.sp, color = Text)
+    val body get() = TextStyle(fontFamily = font, fontSize = 18.sp, color = Text)
+    val small get() = TextStyle(fontFamily = font, fontSize = 15.sp, color = Text)
     val header = TextStyle(fontFamily = font, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = HeaderText)
 }
 

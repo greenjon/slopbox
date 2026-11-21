@@ -410,9 +410,9 @@ private fun PopupMenu(nav: Nav) {
                 .height(120.dp)
                 .drawBehind {
                     val r = CornerRadius(10.dp.toPx())
-                    drawRoundRect(Color(0xFF4A4A4A), cornerRadius = r)
+                    drawRoundRect(Cabbie.Panel, cornerRadius = r)
                 }
-                .border(3.dp, Color(0xFFBDBDBD), RoundedCornerShape(10.dp))
+                .border(3.dp, androidx.compose.ui.graphics.lerp(Cabbie.palette.bg, Cabbie.Text, 0.93f), RoundedCornerShape(10.dp))
                 .padding(10.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
@@ -506,7 +506,7 @@ fun GoldBar(fraction: Float, modifier: Modifier, marks: BarMarks? = null, onScru
         ),
         contentAlignment = Alignment.CenterStart,
     ) {
-        Box(Modifier.fillMaxWidth().fillMaxHeight(0.8f).glossyPill(Cabbie.track, Color(0xFF1E1E1E)))
+        Box(Modifier.fillMaxWidth().fillMaxHeight(0.8f).glossyPill(Cabbie.track, androidx.compose.ui.graphics.lerp(Cabbie.palette.bg, Cabbie.Text, 0.15f)))
         val fr = fraction.coerceIn(0f, 1f)
         if (fr > 0f) {
             Box(Modifier.fillMaxWidth(fr).fillMaxHeight(0.8f).glossyPill(Cabbie.gold, Cabbie.GoldDark))

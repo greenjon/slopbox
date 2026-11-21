@@ -76,6 +76,8 @@ class RbSetting(
 
     /** Rockbox cfg_to_string(). */
     fun toCfg(value: Int): String {
+        // Rockbox cfg_to_string(): colours as rrggbb.
+        if (flags and RbFlags.F_RGB != 0L) return "%06x".format(value and 0xFFFFFF)
         val vals = cfgVals
         if (vals != null) {
             val i = if (tableValues != null) tableValues.indexOf(value) else value
@@ -88,6 +90,8 @@ class RbSetting(
     /** Rockbox cfg_string_to_int(), falling back to a number. */
     fun fromCfg(text: String): Int? {
         val t = text.trim()
+        // Rockbox hex_to_rgb(): six hex digits.
+        if (flags and RbFlags.F_RGB != 0L) return t.takeIf { it.length == 6 }?.toIntOrNull(16)
         cfgVals?.indexOf(t)?.takeIf { it >= 0 }?.let { i ->
             return tableValues?.getOrNull(i) ?: i
         }
@@ -146,8 +150,16 @@ class RbCatalog(
         /**
          * Defaults SlopBox changes from Rockbox's (each listed in DIFFERENCES.md).
          * Status Bar: Bottom, where the mini-player is in thumb reach (Rockbox: Top).
+         * Colours: cabbiev2's (wps/WPSLIST), the theme Rockbox installs as its default.
          */
-        private val SLOPBOX_DEFAULTS: Map<String, Any> = mapOf("statusbar" to 2)
+        private val SLOPBOX_DEFAULTS: Map<String, Any> = mapOf(
+            "statusbar" to 2,
+            "foreground color" to 0xCCCCCC,
+            "background color" to 0x000000,
+            "line selector start color" to 0xFDE89E,
+            "line selector end color" to 0xB58C00,
+            "line selector text color" to 0x000000,
+        )
 
         private fun parseSetting(o: JSONObject): RbSetting {
             val kind = o.getString("kind")
@@ -437,6 +449,8 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "qs top", "qs left", "qs right", "qs bottom", "shortcuts instead of quickscreen",
             "autoresume next track paths", "default codepage", "tagcache_autoupdate", "max files in dir", "max files in playlist", "root menu order", "sort case", "sort dirs", "sort files", "sort interpret number", "show files",
             "show filename exts", "follow playlist", "show path in browser", "keep directory", "show icons", "statusbar",
+            "foreground color", "background color", "line selector start color", "line selector end color",
+            "line selector text color", "list separator color", "list separator height", "selector type",
         )
 
         @Volatile private var instance: SettingsStore? = null

@@ -38,7 +38,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -122,7 +121,7 @@ fun MiniPlayer(controller: MediaController?, nav: Nav, atTop: Boolean) {
         }
     }
     val sep = @Composable { Box(Modifier.fillMaxWidth().height(1.dp).background(Cabbie.Separator.copy(alpha = 0.5f))) }
-    Column(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.55f))) {
+    Column(Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.lerp(Cabbie.palette.bg, Cabbie.Text, 0.1f))) {
         if (atTop) sep() else line()
         Row(
             Modifier

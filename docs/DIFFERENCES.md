@@ -313,6 +313,19 @@ Anything new goes here in the same change that introduces it.
 
 - **Theme engine.** There is none. SlopBox has a native cabbiev2-style
   interface instead of Rockbox's skins.
+- **Theme colours.** Foreground, background, line selector start / end /
+  text colour, list separator colour, Line Separator and Line Selector Type
+  work and are read from `.cfg` files as Rockbox writes them (`rrggbb`).
+  The defaults are cabbiev2's colours, the theme Rockbox installs by
+  default, not the values compiled into Rockbox's settings table. With no
+  bitmaps to recolour, SlopBox derives the rest: the backdrop runs from a
+  lighter shade of the background at the top to the background, dim text
+  and the greys of bars and panels are mixes of foreground and background,
+  and the glossy controls and lit icons take the line selector colours.
+  Line Selector Type Pointer draws a cursor in front of the line; Bar
+  (Inverse) uses the foreground colour for the bar and the background
+  colour for its text. The system bar icons turn dark on a light
+  background.
 - **Playing screen popup.** cabbiev2 shows its Browse / Quick Screen /
   Context Menu popup on any touch, over the track lines. SlopBox shows it
   only for touches on the album art and track lines, so using the progress

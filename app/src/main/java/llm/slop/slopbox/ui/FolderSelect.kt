@@ -139,6 +139,7 @@ fun FolderSelect(title: String, paths: String, onDone: (String?) -> Unit) {
                         Node.EACCESS -> null
                         else -> G.TangoFolder
                     },
+                    forceIcon = true,
                     onLongClick = {
                         when (n.state) {
                             Node.EXPANDED -> n.children!!.forEach {

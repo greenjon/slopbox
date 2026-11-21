@@ -209,7 +209,7 @@ fun ShortcutsScreen(controller: MediaController?, nav: Nav, browser: BrowserStat
         @Suppress("UNUSED_EXPRESSION") clock
         LazyColumn(Modifier.fillMaxSize()) {
             itemsIndexed(list) { _, (index, sc) ->
-                RockRow(shortcutName(ctx, sc), icon = if (store.int("show icons") != 0) shortcutIcon(sc) else null,
+                RockRow(shortcutName(ctx, sc), icon = shortcutIcon(sc),
                     onLongClick = { confirmDelete = index }) { run(sc) }
             }
         }

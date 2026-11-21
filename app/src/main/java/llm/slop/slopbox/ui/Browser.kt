@@ -168,7 +168,12 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
     val showFiles = fv.int("show files")
     LaunchedEffect(tree, dir.id, state.reload, fvRev) {
         // Show Files (Rockbox's dirfilter); dot files only with All.
-        entries = MusicTree.list(ctx, tree, dir.id, hidden = showFiles == 0).filter { FileView.visible(it, showFiles) }
+        val all = MusicTree.list(ctx, tree, dir.id, hidden = showFiles == 0).filter { FileView.visible(it, showFiles) }
+        // Rockbox "Max Entries in File Browser": the rest are left out, with "Dir Buffer is Full!".
+        val max = fv.int("max files in dir")
+        if (all.size > max) android.widget.Toast.makeText(ctx, fv.catalog.str("LANG_SHOWDIR_BUFFER_FULL"),
+            android.widget.Toast.LENGTH_SHORT).show()
+        entries = all.take(max)
         state.remember(ctx)
     }
     var viewing by remember { mutableStateOf<Doc?>(null) }
@@ -266,7 +271,6 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
                     RockRow(
                         FileView.displayName(e, fv),
                         icon = when {
-                            fv.int("show icons") == 0 -> null
                             e.isDir -> G.TangoFolder
                             e.isPlaylist -> G.ListC
                             e.isTrack -> G.TangoNote

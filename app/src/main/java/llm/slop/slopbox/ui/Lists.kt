@@ -97,8 +97,13 @@ fun RockRow(
     /** Shown at the right, e.g. a value. */
     trailing: String? = null,
     onLongClick: (() -> Unit)? = null,
+    /** Show the icon even with Show Icons off (Rockbox's folder picker does). */
+    forceIcon: Boolean = false,
     onClick: () -> Unit,
 ) {
+    // Rockbox Theme Settings > Show Icons: list icons on or off everywhere.
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val showIcons = forceIcon || llm.slop.slopbox.SettingsStore.get(ctx).int("show icons") != 0
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val bar = (selected || pressed) && enabled
@@ -124,7 +129,7 @@ fun RockRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (icon != null) Glyph(icon, Modifier.size(32.dp))
+            if (icon != null && showIcons) Glyph(icon, Modifier.size(32.dp))
             Column(Modifier.weight(1f)) {
                 BasicText(text, style = Cabbie.body.copy(color = color), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (sub != null) {

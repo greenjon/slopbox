@@ -101,7 +101,9 @@ object MusicTree {
     }
 
     /** Every playable file under [dir], depth first in browser order. */
-    suspend fun walk(ctx: Context, tree: Uri, dir: Doc, limit: Int = 5000): List<Pair<Doc, Doc>> {
+    /** [limit]: Rockbox's "Max Playlist Size" unless given. */
+    suspend fun walk(ctx: Context, tree: Uri, dir: Doc,
+                     limit: Int = llm.slop.slopbox.SettingsStore.get(ctx).int("max files in playlist")): List<Pair<Doc, Doc>> {
         val out = mutableListOf<Pair<Doc, Doc>>() // file to its folder
         suspend fun go(d: Doc) {
             for (e in list(ctx, tree, d.id)) {

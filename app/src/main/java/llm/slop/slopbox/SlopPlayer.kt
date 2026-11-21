@@ -838,7 +838,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         entries.clear()
         lastInsertPos = -1
         playlistModified = false
-        mediaItems.forEach { entries += Entry(nextUid++, it) }
+        capped(mediaItems, 0).forEach { entries += Entry(nextUid++, it) }
         index = if (startIndex == C.INDEX_UNSET) 0 else startIndex.coerceIn(0, maxOf(0, entries.size - 1))
         heldPositionMs = if (startPositionMs == C.TIME_UNSET) 0 else startPositionMs
         shuffled = false
@@ -863,13 +863,14 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     override fun handleAddMediaItems(index: Int, mediaItems: MutableList<MediaItem>): ListenableFuture<*> {
         val at = index.coerceIn(0, entries.size)
         playlistModified = true
-        val added = mediaItems.map { Entry(nextUid++, it).also { e -> e.inserted = true } }
+        val added = capped(mediaItems, entries.size).map { Entry(nextUid++, it).also { e -> e.inserted = true } }
+        if (added.isEmpty()) return Futures.immediateVoidFuture()
         entries.addAll(at, added)
         if (shuffled) original += added else syncOriginal()
-        if (entries.size == mediaItems.size) {
+        if (entries.size == added.size) {
             this.index = 0
         } else if (at <= this.index) {
-            this.index += mediaItems.size
+            this.index += added.size
         }
         if (playbackState == Player.STATE_ENDED) {
             // Adding to a finished queue continues with the new items.
@@ -1221,7 +1222,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
      * [replace] starts a new playlist (keeping the current track if "Keep Current
      * Track When Replacing Playlist" says so and something is playing).
      */
-    fun addToPlaylist(items: List<MediaItem>, position: Int, queue: Boolean, replace: Boolean) {
+    fun addToPlaylist(items0: List<MediaItem>, position: Int, queue: Boolean, replace: Boolean) {
+        val keepCurrent = replace && setting("keep current track when replacing playlist") != 0 && engineActive
+        val items = capped(items0, if (!replace) entries.size else if (keepCurrent) 1 else 0)
         if (items.isEmpty()) return
         PowerMgmt.userActivity()
         var newPlaylist = replace
@@ -1295,6 +1298,20 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             PLAYLIST_INSERT_LAST_SHUFFLED -> lastShuffledStart + kotlin.random.Random.nextInt(n - lastShuffledStart + 1)
             else -> n
         }
+    }
+
+    /**
+     * Rockbox "Max Playlist Size": what fits after [already] tracks; when
+     * something doesn't, "Playlist Buffer Full".
+     */
+    private fun capped(items: List<MediaItem>, already: Int): List<MediaItem> {
+        val room = (setting("max files in playlist") - already).coerceAtLeast(0)
+        if (items.size <= room) return items
+        handler.post {
+            android.widget.Toast.makeText(context, store.catalog.str("LANG_PLAYLIST_BUFFER_FULL"),
+                android.widget.Toast.LENGTH_SHORT).show()
+        }
+        return items.take(room)
     }
 
     /** Rockbox playlist_set_modified(NULL, true), e.g. after a plugin builds the playlist. */

@@ -43,7 +43,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -93,30 +102,109 @@ fun PlaylistScreen(controller: MediaController?, nav: Nav) {
     }
 
     val listState = rememberLazyListState((current - 3).coerceAtLeast(0))
+    // SlopBox: swipe a line left to remove it (with Undo); drag its ≡ handle to move it.
+    var undo by remember { mutableStateOf<Pair<Int, MediaItem>?>(null) }
+    LaunchedEffect(undo) { if (undo != null) { delay(5000); undo = null } }
+    var dragFrom by remember { mutableStateOf<Int?>(null) }
+    var dragDy by remember { mutableStateOf(0f) }
+    var rowPx by remember { mutableIntStateOf(1) }
+    val haptics = rememberHaptics()
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
         TitleBar(if (moving != null) store.catalog.str("LANG_MOVE") else "Playlist (${items.size})",
             onBack = { if (moving != null) moving = null else nav.pop() })
         if (items.isEmpty()) ListNote("The playlist is empty.")
         RockList(Modifier.fillMaxSize(), state = listState) {
-            itemsIndexed(items) { i, item ->
-                RockRow(
-                    trackLabel(ctx, item, i),
-                    icon = if (!showIcons) null else if (i == current) G.Cursor else G.TangoNote,
-                    selected = if (moving != null) i == moving else i == current,
-                    onLongClick = { menuFor = i },
+            itemsIndexed(items, key = { i, it -> "${it.mediaId}#$i#$version" }) { i, item ->
+                var dx by remember { mutableStateOf(0f) }
+                val lifted = dragFrom == i
+                Box(
+                    Modifier
+                        .onSizeChanged { rowPx = maxOf(it.height, 1) }
+                        .zIndex(if (lifted) 1f else 0f)
+                        .graphicsLayer {
+                            translationX = dx
+                            translationY = if (lifted) dragDy else 0f
+                            alpha = if (dx < 0) (1f + dx / size.width).coerceIn(0.3f, 1f) else 1f
+                        }
+                        .pointerInput(i, version) {
+                            detectHorizontalDragGestures(
+                                onDragEnd = {
+                                    if (dx < -size.width * 0.35f && controller != null && moving == null) {
+                                        haptics.press()
+                                        undo = i to item
+                                        controller.removeMediaItem(i)
+                                        version++
+                                    }
+                                    dx = 0f
+                                },
+                                onDragCancel = { dx = 0f },
+                            ) { ch, d -> ch.consume(); dx = (dx + d).coerceAtMost(0f) }
+                        },
                 ) {
-                    val m = moving
-                    if (m != null) {
-                        controller?.moveMediaItem(m, i)
-                        moving = null
-                        version++
-                    } else {
-                        controller?.run { seekTo(i, 0); play() }
-                        nav.pop()
+                    RockRow(
+                        trackLabel(ctx, item, i),
+                        icon = if (!showIcons) null else if (i == current) G.Cursor else G.TangoNote,
+                        selected = lifted || (if (moving != null) i == moving else i == current),
+                        onLongClick = { menuFor = i },
+                    ) {
+                        val m = moving
+                        if (m != null) {
+                            controller?.moveMediaItem(m, i)
+                            moving = null
+                            version++
+                        } else {
+                            controller?.run { seekTo(i, 0); play() }
+                            nav.pop()
+                        }
+                    }
+                    // The move handle.
+                    Box(
+                        Modifier.align(Alignment.CenterEnd).width(52.dp).fillMaxHeight()
+                            .pointerInput(i, version) {
+                                detectDragGestures(
+                                    onDragStart = { dragFrom = i; dragDy = 0f; haptics.press() },
+                                    onDragEnd = {
+                                        val from = dragFrom
+                                        if (from != null && controller != null) {
+                                            val to = (from + (dragDy / rowPx).roundToInt()).coerceIn(0, items.lastIndex)
+                                            if (to != from) { controller.moveMediaItem(from, to); version++ }
+                                        }
+                                        dragFrom = null; dragDy = 0f
+                                    },
+                                    onDragCancel = { dragFrom = null; dragDy = 0f },
+                                ) { ch, d ->
+                                    ch.consume()
+                                    val before = (dragDy / rowPx).roundToInt()
+                                    dragDy += d.y
+                                    if ((dragDy / rowPx).roundToInt() != before) haptics.tick()
+                                }
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        BasicText("≡", style = Cabbie.body.copy(fontSize = 26.sp,
+                            color = if (lifted || i == current) Cabbie.selectorText else Cabbie.Dim))
                     }
                 }
             }
         }
+    }
+    undo?.let { (at, item) ->
+        Row(
+            Modifier.align(Alignment.BottomCenter).padding(12.dp).fillMaxWidth().height(52.dp)
+                .background(Cabbie.Panel, androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BasicText("Removed ${name(item)}", Modifier.weight(1f), style = Cabbie.body, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            BasicText("UNDO", Modifier.clickable {
+                controller?.addMediaItem(at.coerceAtMost(controller.mediaItemCount), item)
+                undo = null
+                version++
+            }.padding(8.dp), style = Cabbie.body.copy(color = Cabbie.Gold, fontWeight = FontWeight.Bold))
+        }
+    }
     }
 }
 

@@ -112,7 +112,7 @@ private fun DrawScope.round(x: Float, y: Float, w: Float, h: Float, r: Float) = 
 /** Gradient fill, a darker rim, and a highlight over the top part. */
 private fun DrawScope.glossy(path: Path, body: Brush, rim: Color) {
     drawPath(path, body)
-    clipPath(path) {
+    if (!Cabbie.palette.flat) clipPath(path) {
         drawRect(
             Brush.verticalGradient(
                 listOf(Color.White.copy(alpha = 0.5f), Color.White.copy(alpha = 0.05f)),

@@ -58,6 +58,12 @@ data class Palette(
     val separatorPx: Int = -1,
     /** Rockbox "selector type": 0 pointer, 1 bar (inverse), 2 bar (solid colour), 3 bar (gradient). */
     val selectorType: Int = 3,
+    /** SlopBox Flat Style: no gloss, solid controls. */
+    val flat: Boolean = false,
+    /** SlopBox Text Size, as a scale. */
+    val textScale: Float = 1f,
+    /** SlopBox Navigation at Bottom. */
+    val bottomNav: Boolean = false,
 ) {
     /** Text and background far enough apart to read (WCAG's 3:1, for large text). */
     val readable get() = contrast(fg, bg) >= 3f
@@ -83,6 +89,10 @@ data class Palette(
                 separator = rgb("list separator color", d.separator),
                 separatorPx = store.catalog.byCfg["list separator height"]?.let { store.int(it) } ?: d.separatorPx,
                 selectorType = store.catalog.byCfg["selector type"]?.let { store.int(it) } ?: d.selectorType,
+                flat = store.int(llm.slop.slopbox.SlopBoxSettings.FLAT) != 0,
+                textScale = llm.slop.slopbox.SlopBoxSettings.TEXT_SCALES
+                    .getOrElse(store.int(llm.slop.slopbox.SlopBoxSettings.TEXT_SIZE)) { 1f },
+                bottomNav = store.int(llm.slop.slopbox.SlopBoxSettings.BOTTOM_NAV) != 0,
             )
         }
     }
@@ -169,13 +179,15 @@ object Cabbie {
     }
     /** Text on the selector bar: Inverse uses the background colour. */
     val selectorText get() = if (palette.selectorType == 1) palette.bg else palette.selText
-    val gold get() = Brush.verticalGradient(listOf(GoldLight, Gold, GoldDark))
-    val track get() = Brush.verticalGradient(listOf(lerp(palette.bg, palette.fg, 0.52f), Track, TrackDark))
+    val gold: Brush get() = if (palette.flat) SolidColor(Gold) else Brush.verticalGradient(listOf(GoldLight, Gold, GoldDark))
+    val track: Brush get() = if (palette.flat) SolidColor(Track) else Brush.verticalGradient(listOf(lerp(palette.bg, palette.fg, 0.52f), Track, TrackDark))
 
     val font = FontFamily.SansSerif
-    val body get() = TextStyle(fontFamily = font, fontSize = 18.sp, color = Text)
-    val small get() = TextStyle(fontFamily = font, fontSize = 15.sp, color = Text)
-    val header = TextStyle(fontFamily = font, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = HeaderText)
+    /** SlopBox Text Size. */
+    val scale get() = palette.textScale
+    val body get() = TextStyle(fontFamily = font, fontSize = 18.sp * scale, color = Text)
+    val small get() = TextStyle(fontFamily = font, fontSize = 15.sp * scale, color = Text)
+    val header get() = TextStyle(fontFamily = font, fontSize = 17.sp * scale, fontWeight = FontWeight.Bold, color = HeaderText)
 }
 
 /** Full-screen cabbiev2 backdrop. */
@@ -192,6 +204,7 @@ fun Modifier.glossyPill(body: Brush, rim: Color): Modifier = drawBehind {
     val r = CornerRadius(size.height / 2, size.height / 2)
     drawRoundRect(body, cornerRadius = r)
     drawRoundRect(rim, cornerRadius = r, style = Stroke(1.dp.toPx()))
+    if (Cabbie.palette.flat) return@drawBehind
     val inset = 2.dp.toPx()
     val hh = (size.height / 2 - inset).coerceAtLeast(0f)
     drawRoundRect(

@@ -376,6 +376,19 @@ Anything new goes here in the same change that introduces it.
   Album Art Colours on While Playing Screen (off by default) takes the
   line selector colours, and so the bars and buttons, from the art while
   that screen is showing.
+- **Look.** Theme Settings › SlopBox › Flat Style (off by default) drops
+  the gloss from bars, buttons and icons. Text Size (Small, Normal, Large,
+  Huge) scales the type and line heights; it's SlopBox's own setting, and
+  Rockbox's Font setting is still unused.
+- **Navigation at Bottom.** Theme Settings › SlopBox › Navigation at Bottom
+  (off by default) moves each screen's title bar (back, title, buttons) to
+  the bottom, above the mini-player, for one-handed use.
+- **Playlist viewer editing.** Besides Rockbox's context menu (Remove,
+  Move), a line can be swiped left to remove it, with Undo for a few
+  seconds, and dragged by its ≡ handle to move it.
+- **Rotation.** Rockbox's screens have one fixed size. SlopBox follows the
+  phone's rotation; in landscape the While Playing Screen puts the art and
+  track on the left and the bar and controls on the right.
 - **File browser title.** With Show Path set to Full Path, each folder in
   the path can be tapped to go back up to it. With Current Directory Only,
   tapping the folder's name lists the folders above it to jump to.

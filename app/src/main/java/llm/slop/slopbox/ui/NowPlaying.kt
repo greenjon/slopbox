@@ -212,6 +212,8 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
         else -> null
     }
     var showTotal by remember { mutableStateOf(false) }
+    val landscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     Box(Modifier.fillMaxSize()) {
     if (layout == WpsLayout.BIG_ART && art != null) BlurredArt(art)
@@ -234,11 +236,12 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
             return@Column
         }
 
+        val middle: @Composable (Modifier) -> Unit = { mod ->
         // cabbiev2 shows the popup on any touch (%Tl). Here only a tap on the track lines
         // or empty space does: not the controls or bar, and not a swipe, double-tap or
         // long-press (the gestures work over this whole area; a tap on the art opens the playlist).
         BoxWithConstraints(
-            Modifier.weight(1f).fillMaxWidth().artGestures(controller, nav, ctx, haptics) {
+            mod.artGestures(controller, nav, ctx, haptics) {
                 lastTouch = System.currentTimeMillis()
                 now = lastTouch
             },
@@ -248,7 +251,7 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
             if (layout != WpsLayout.CABBIE) {
                 AltMiddle(layout, art, album, title, artist, s.codecLine, nextLine, toPlaylistAlt, overlay)
             } else {
-            val artSize: Dp = min(maxWidth * 0.68f, maxHeight * 0.48f)
+            val artSize: Dp = if (landscape) min(maxWidth * 0.8f, maxHeight * 0.62f) else min(maxWidth * 0.68f, maxHeight * 0.48f)
             Column(Modifier.fillMaxSize()) {
                 Spacer(Modifier.height(14.dp))
                 // cabbiev2: a tap opens the playlist. SlopBox adds gestures (Theme Settings ›
@@ -310,6 +313,8 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
             }
         }
 
+        }
+        val controls: @Composable ColumnScope.() -> Unit = {
         // Progress bar, then "elapsed   3 of 12   remaining".
         val shown = preview ?: s.positionMs
         val dur = s.durationMs
@@ -428,6 +433,18 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
                 Glyph(g, Modifier.size(glyph + 4.dp))
             }
         }
+        }
+        // Landscape: the art and track on the left, the bar and controls on the right.
+        if (landscape) {
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                middle(Modifier.weight(1f).fillMaxHeight())
+                Spacer(Modifier.width(20.dp))
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) { controls() }
+            }
+        } else {
+            middle(Modifier.weight(1f).fillMaxWidth())
+            controls()
+        }
     }
     }
 }
@@ -438,7 +455,7 @@ internal fun ColumnScope.Line(text: String, scroll: Boolean = false, big: Boolea
     BasicText(
         text,
         Modifier.fillMaxWidth().padding(vertical = 1.dp),
-        style = (if (big) Cabbie.body.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold) else Cabbie.body)
+        style = (if (big) Cabbie.body.copy(fontSize = 20.sp * Cabbie.scale, fontWeight = FontWeight.Bold) else Cabbie.body)
             .copy(textAlign = TextAlign.Center, color = if (dim) Cabbie.Dim else Cabbie.Text),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

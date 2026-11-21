@@ -458,7 +458,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "scrollbar", "scrollbar width",
             SlopBoxSettings.SWIPE_TRACKS, SlopBoxSettings.SWIPE_PLAYLIST, SlopBoxSettings.DOUBLE_TAP,
             SlopBoxSettings.LONG_PRESS, SlopBoxSettings.EDGE_VOLUME, SlopBoxSettings.HAPTICS,
-            SlopBoxSettings.ART_ACCENT, "wps",
+            SlopBoxSettings.ART_ACCENT, "wps", SlopBoxSettings.FLAT, SlopBoxSettings.TEXT_SIZE, SlopBoxSettings.BOTTOM_NAV,
         )
 
         @Volatile private var instance: SettingsStore? = null
@@ -475,9 +475,15 @@ class SettingsStore private constructor(private val context: Context, val catalo
  * They live in config.cfg under "slopbox ..." names, which Rockbox ignores.
  */
 object SlopBoxSettings {
-    class Bool(val cfg: String, val title: String, val default: Boolean) {
-        fun setting(index: Int) = RbSetting(index, cfg, RbFlags.F_T_BOOL, title, "bool", if (default) 1 else 0,
+    sealed class Extra(val cfg: String, val title: String) { abstract fun setting(index: Int): RbSetting }
+    class Bool(cfg: String, title: String, val default: Boolean) : Extra(cfg, title) {
+        override fun setting(index: Int) = RbSetting(index, cfg, RbFlags.F_T_BOOL, title, "bool", if (default) 1 else 0,
             null, listOf(0 to "Off", 1 to "On"), listOf("off", "on"), null)
+    }
+    /** A choice: [labels] shown, [cfgVals] written to config.cfg. */
+    class Choice(cfg: String, title: String, val labels: List<String>, val cfgVals: List<String>, val default: Int) : Extra(cfg, title) {
+        override fun setting(index: Int) = RbSetting(index, cfg, 1L, title, "choice", default,
+            null, labels.mapIndexed { i, l -> i to l }, cfgVals, null)
     }
 
     const val SWIPE_TRACKS = "slopbox swipe tracks"
@@ -487,8 +493,11 @@ object SlopBoxSettings {
     const val EDGE_VOLUME = "slopbox edge volume"
     const val HAPTICS = "slopbox haptics"
     const val ART_ACCENT = "slopbox art colours"
+    const val FLAT = "slopbox flat style"
+    const val TEXT_SIZE = "slopbox text size"
+    const val BOTTOM_NAV = "slopbox navigation at bottom"
 
-    val ALL = listOf(
+    val ALL: List<Extra> = listOf(
         Bool(SWIPE_TRACKS, "Swipe Art to Change Track", true),
         Bool(SWIPE_PLAYLIST, "Swipe Up for Playlist", true),
         Bool(DOUBLE_TAP, "Double-Tap to Play/Pause", true),
@@ -496,7 +505,13 @@ object SlopBoxSettings {
         Bool(EDGE_VOLUME, "Right Edge Volume", true),
         Bool(HAPTICS, "Haptic Feedback", true),
         Bool(ART_ACCENT, "Album Art Colours on While Playing Screen", false),
+        Bool(FLAT, "Flat Style", false),
+        Choice(TEXT_SIZE, "Text Size", listOf("Small", "Normal", "Large", "Huge"), listOf("small", "normal", "large", "huge"), 1),
+        Bool(BOTTOM_NAV, "Navigation at Bottom", false),
     )
+
+    /** Text Size as a scale for type and line heights. */
+    val TEXT_SCALES = listOf(0.85f, 1f, 1.2f, 1.45f)
     /** How many of [ALL] are Now Playing gestures (the rest sit directly in the SlopBox menu). */
     private const val GESTURES = 5
 

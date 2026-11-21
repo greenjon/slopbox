@@ -142,6 +142,7 @@ fun SlopApp(
                 Screen.System -> SystemMenu(nav)
             }
           }
+          BottomNav.bar?.let { if (Cabbie.palette.bottomNav) it() }
           if (bar == 2) MiniPlayer(controller, nav, atTop = false)
         }
     }

@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,7 +54,44 @@ fun TitleBar(
     titleContent: (@Composable RowScope.() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
+    // SlopBox Navigation at Bottom: hand the bar to the app, which draws it at the bottom.
+    if (Cabbie.palette.bottomNav) {
+        val token = remember { Any() }
+        val bar by androidx.compose.runtime.rememberUpdatedState<@Composable () -> Unit>({
+            Column {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Cabbie.Separator))
+                TitleRow(title, onBack, titleContent, actions)
+            }
+        })
+        androidx.compose.runtime.SideEffect { BottomNav.show(token) { bar() } }
+        androidx.compose.runtime.DisposableEffect(token) { onDispose { BottomNav.hide(token) } }
+        return
+    }
     Column {
+        TitleRow(title, onBack, titleContent, actions)
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Cabbie.Separator))
+    }
+}
+
+/** Where a screen's title bar goes with Navigation at Bottom; [App] draws [bar]. */
+object BottomNav {
+    var bar by androidx.compose.runtime.mutableStateOf<(@Composable () -> Unit)?>(null)
+        private set
+    private var owner: Any? = null
+    fun show(token: Any, content: @Composable () -> Unit) {
+        if (owner === token && bar != null) return
+        owner = token; bar = content
+    }
+    fun hide(token: Any) { if (owner === token) { owner = null; bar = null } }
+}
+
+@Composable
+private fun TitleRow(
+    title: String,
+    onBack: (() -> Unit)?,
+    titleContent: (@Composable RowScope.() -> Unit)?,
+    actions: @Composable RowScope.() -> Unit,
+) {
         Row(
             Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -74,8 +112,6 @@ fun TitleBar(
             )
             actions()
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Cabbie.Separator))
-    }
 }
 
 /** A square touch target holding a glyph, for title bar actions. */
@@ -127,7 +163,7 @@ fun RockRow(
         Row(
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = 56.dp)
+                .heightIn(min = 56.dp * Cabbie.scale.coerceAtLeast(1f))
                 .then(if (bar) Modifier.background(selBrush!!) else Modifier)
                 .combinedClickable(
                     interactionSource = source,
@@ -143,7 +179,7 @@ fun RockRow(
             if (selBrush == null) Box(Modifier.size(width = 18.dp, height = 24.dp)) {
                 if (pointer) Glyph(G.Cursor, Modifier.matchParentSize())
             }
-            if (icon != null && showIcons) Glyph(icon, Modifier.size(32.dp))
+            if (icon != null && showIcons) Glyph(icon, Modifier.size(32.dp * Cabbie.scale.coerceAtLeast(1f)))
             Column(Modifier.weight(1f)) {
                 BasicText(text, style = Cabbie.body.copy(color = color), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (sub != null) {

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -74,9 +75,12 @@ internal fun AltMiddle(
 ) {
     Box(Modifier.fillMaxSize()) {
         when {
-            layout == WpsLayout.BIG_ART && art != null -> Column(Modifier.fillMaxSize()) {
+            layout == WpsLayout.BIG_ART && art != null -> androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+              // As big a square as fits, leaving room for the next-track line.
+              val side = androidx.compose.ui.unit.min(maxWidth, maxHeight - 40.dp)
+              Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(Modifier.height(8.dp))
-                Box(Modifier.fillMaxWidth().weight(1f, fill = false).aspectRatio(1f, matchHeightConstraintsFirst = false)
+                Box(Modifier.size(side - 8.dp)
                     .clip(RoundedCornerShape(8.dp)).then(gestures)) {
                     Image(art, contentDescription = "Album art", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     Column(
@@ -93,6 +97,7 @@ internal fun AltMiddle(
                 }
                 Spacer(Modifier.weight(1f, fill = true).height(0.dp))
                 Line(next, scroll = true, dim = true)
+              }
             }
             layout == WpsLayout.LARGE || layout == WpsLayout.BIG_ART -> Column(
                 Modifier.fillMaxSize().then(gestures), verticalArrangement = Arrangement.Center,

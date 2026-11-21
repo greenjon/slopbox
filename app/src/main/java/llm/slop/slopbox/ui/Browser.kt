@@ -488,9 +488,12 @@ private fun androidx.compose.foundation.layout.RowScope.Breadcrumbs(path: List<D
                 style = Cabbie.body, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
             if (open) androidx.compose.ui.window.Popup(
+                // With Navigation at Bottom the list opens upward.
+                alignment = if (Cabbie.palette.bottomNav) androidx.compose.ui.Alignment.BottomStart else androidx.compose.ui.Alignment.TopStart,
                 onDismissRequest = { open = false },
                 properties = androidx.compose.ui.window.PopupProperties(focusable = true),
-                offset = androidx.compose.ui.unit.IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) { 48.dp.roundToPx() }),
+                offset = androidx.compose.ui.unit.IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) {
+                    (if (Cabbie.palette.bottomNav) (-48).dp else 48.dp).roundToPx() }),
             ) {
                 androidx.compose.foundation.layout.Column(
                     Modifier.width(280.dp).background(Cabbie.backdrop)

@@ -313,6 +313,10 @@ Anything new goes here in the same change that introduces it.
 
 - **Theme engine.** There is none. SlopBox has a native cabbiev2-style
   interface instead of Rockbox's skins.
+- **Playing screen popup.** cabbiev2 shows its Browse / Quick Screen /
+  Context Menu popup on any touch, over the track lines. SlopBox shows it
+  only for touches on the album art and track lines, so using the progress
+  bar or the buttons doesn't hide what's playing.
 - **Main menu.** It has Rockbox's order and Settings > Main Menu
   customisation (a port of the main_menu_config plugin), but only the items
   SlopBox has: no Recording or FM Radio. SlopBox doesn't use the Rockbox name

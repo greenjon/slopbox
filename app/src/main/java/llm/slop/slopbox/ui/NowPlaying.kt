@@ -146,8 +146,9 @@ private const val VOLUME_MS = 2000L  // cabbiev2: %?mv(2.0) / %?Tl(small_vol,2.0
  * gold NOW PLAYING bar, album art, track lines, progress bar and times,
  * then rewind/ff on the left and volume/shuffle/repeat/play on the right.
  *
- * Touch, as in cabbiev2: art or track lines open the playlist; any touch shows
- * the Browse / Quick Screen / Context Menu popup for a moment; the volume icon
+ * Touch, as in cabbiev2: art or track lines open the playlist; a touch on the
+ * art or track lines (not the bar or controls) shows the Browse / Quick Screen /
+ * Context Menu popup for a moment; the volume icon
  * (or a volume key) shows a volume bar; the progress bar seeks; play/pause
  * (hold: stop); |<< >>| skip (hold: rewind / fast forward).
  */
@@ -191,19 +192,7 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
     val showVolume = now - volumeAt < VOLUME_MS
     val showPopup = !showVolume && now - lastTouch < POPUP_MS
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                // Watch every touch without taking it (cabbiev2's %Tl).
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                    lastTouch = System.currentTimeMillis()
-                    now = lastTouch
-                }
-            }
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-    ) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp)) {
         Box(
             Modifier.fillMaxWidth().height(30.dp).glossyPill(Cabbie.gold, Cabbie.GoldDark),
             contentAlignment = Alignment.Center,
@@ -222,7 +211,18 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
             return@Column
         }
 
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+        // cabbiev2 shows the popup on any touch (%Tl). Here only touches on the art and
+        // track lines do, so the controls and progress bar don't hide what's playing.
+        BoxWithConstraints(
+            Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) {
+                // Watch the touch without taking it.
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    lastTouch = System.currentTimeMillis()
+                    now = lastTouch
+                }
+            },
+        ) {
             val artSize: Dp = min(maxWidth * 0.68f, maxHeight * 0.48f)
             Column(Modifier.fillMaxSize()) {
                 Spacer(Modifier.height(14.dp))

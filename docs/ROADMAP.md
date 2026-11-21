@@ -9,7 +9,7 @@
   settings~~ (done).
 - ~~System menu: SlopBox Info, Credits, Running Time, Legal Notices~~ (done).
 - ~~Database scans save their progress as they go~~ (done).
-- A signed release build.
+- ~~A signed release build~~ (1.0.0).
 
 ## 1.1
 

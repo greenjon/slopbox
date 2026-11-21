@@ -363,6 +363,19 @@ Anything new goes here in the same change that introduces it.
   while dragging the scroll bar (Theme Settings › SlopBox › Haptic
   Feedback, on by default; Android's own touch vibration setting applies
   too).
+- **While Playing Screen layouts.** SlopBox doesn't read `.wps` skins.
+  Theme Settings › While Playing Screen picks one of SlopBox's own layouts,
+  saved in the `wps` setting under a skin name: Cabbie (`cabbiev2`, the
+  default), Big Art (`slop-bigart`: the art across the screen with the
+  track over it, on a blurred copy of the art on Android 12 and later),
+  Large (`slop-large`: no art, big type and buttons) and Minimal
+  (`slop-minimal`: no art, only skip and play/pause). On every layout the
+  time left can be tapped to show the track's length instead, the progress
+  bar thickens while it's dragged, and the Cabbie layout shows the codec
+  line under the artist when there is art. Theme Settings › SlopBox ›
+  Album Art Colours on While Playing Screen (off by default) takes the
+  line selector colours, and so the bars and buttons, from the art while
+  that screen is showing.
 - **File browser title.** With Show Path set to Full Path, each folder in
   the path can be tapped to go back up to it. With Current Directory Only,
   tapping the folder's name lists the folders above it to jump to.

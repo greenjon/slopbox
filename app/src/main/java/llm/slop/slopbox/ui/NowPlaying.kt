@@ -196,8 +196,27 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
     val showVolume = now - volumeAt < VOLUME_MS
     val showPopup = !showVolume && now - lastTouch < POPUP_MS
 
+    // Rockbox's While Playing Screen setting picks the layout (Theme Settings › While Playing Screen).
+    val store = remember { llm.slop.slopbox.SettingsStore.get(ctx) }
+    val layout = WpsLayout.of(store)
+    // SlopBox Album Art Colours: the line selector colours (and so the controls) from the art, here only.
+    val accentOn = store.int(llm.slop.slopbox.SlopBoxSettings.ART_ACCENT) != 0
+    LaunchedEffect(art, accentOn) {
+        Cabbie.accent = if (accentOn && art != null)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { ArtAccent.of(art) } else null
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { Cabbie.accent = null } }
+    val overlay: (@Composable () -> Unit)? = when {
+        showVolume -> ({ VolumeBar(ctx, s.volume) { volumeAt = System.currentTimeMillis() } })
+        showPopup -> ({ PopupMenu(nav) })
+        else -> null
+    }
+    var showTotal by remember { mutableStateOf(false) }
+
+    Box(Modifier.fillMaxSize()) {
+    if (layout == WpsLayout.BIG_ART && art != null) BlurredArt(art)
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Box(
+        if (layout == WpsLayout.CABBIE) Box(
             Modifier.fillMaxWidth().height(30.dp).glossyPill(Cabbie.gold, Cabbie.GoldDark),
             contentAlignment = Alignment.Center,
         ) { BasicText("NOW PLAYING", style = Cabbie.header) }
@@ -224,6 +243,11 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
                 now = lastTouch
             },
         ) {
+            val toPlaylistAlt = Modifier.artGestures(controller, nav, ctx, haptics)
+            val nextLine = if (s.next != null) "Next: ${listOf(nextArtist, nextTitle).filter { it.isNotEmpty() }.joinToString(" - ")}" else ""
+            if (layout != WpsLayout.CABBIE) {
+                AltMiddle(layout, art, album, title, artist, s.codecLine, nextLine, toPlaylistAlt, overlay)
+            } else {
             val artSize: Dp = min(maxWidth * 0.68f, maxHeight * 0.48f)
             Column(Modifier.fillMaxSize()) {
                 Spacer(Modifier.height(14.dp))
@@ -256,6 +280,7 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
                             Line(album, scroll = true)
                             Line(title, scroll = true, big = true)
                             Line(artist, scroll = true)
+                            Line(s.codecLine, dim = true)
                             Spacer(Modifier.weight(1f))
                             Line(
                                 if (s.next != null) "Next: ${listOf(nextArtist, nextTitle).filter { it.isNotEmpty() }.joinToString(" - ")}" else "",
@@ -275,6 +300,7 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
                     }
                 }
             }
+            }
             // SlopBox: a vertical drag along the right edge sets the volume (shows the volume bar).
             if (!showPopup && llm.slop.slopbox.SettingsStore.get(ctx).int(llm.slop.slopbox.SlopBoxSettings.EDGE_VOLUME) != 0) {
                 EdgeVolume(ctx, Modifier.align(Alignment.CenterEnd).width(36.dp).fillMaxHeight()) {
@@ -289,7 +315,8 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
         val dur = s.durationMs
         GoldBar(
             fraction = if (dur > 0) shown.toFloat() / dur else 0f,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(22.dp),
+            // A little thicker while being dragged (or fast-forwarded).
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(if (preview != null) 30.dp else 22.dp),
             marks = if (dur > 0) BarMarks(dur, if (s.rbRepeat == 4) s.abA else -1, if (s.rbRepeat == 4) s.abB else -1, s.cueMarks) else null,
         ) { f, done ->
             if (dur <= 0) return@GoldBar
@@ -302,9 +329,13 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicText(fmt(shown), Modifier.weight(1f), style = Cabbie.small)
             BasicText("${s.index + 1} of ${s.count}", Modifier.weight(1f), style = Cabbie.small.copy(textAlign = TextAlign.Center))
+            // SlopBox: tap to switch between time left and the track's length.
             BasicText(
-                if (dur > 0) fmt((dur - shown).coerceAtLeast(0)) else "",
-                Modifier.weight(1f), style = Cabbie.small.copy(textAlign = TextAlign.End),
+                if (dur <= 0) "" else if (showTotal) fmt(dur) else fmt((dur - shown).coerceAtLeast(0)),
+                Modifier.weight(1f).clickable(
+                    interactionSource = remember { MutableInteractionSource() }, indication = null,
+                ) { showTotal = !showTotal },
+                style = Cabbie.small.copy(textAlign = TextAlign.End),
             )
         }
 
@@ -328,10 +359,12 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
         var seeking by remember { mutableStateOf<G?>(null) }
         var ffStep by remember { mutableStateOf(1000L) }
         val settings = remember { llm.slop.slopbox.SettingsStore.get(ctx) }
-        Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
+        val big = layout == WpsLayout.LARGE
+        val glyph = if (big) 52.dp else 36.dp
+        Row(Modifier.fillMaxWidth().height(if (big) 92.dp else 64.dp), verticalAlignment = Alignment.CenterVertically) {
             for ((g, dir) in listOf(G.Prev to -1, G.Next to 1)) {
                 SeekButton(
-                    g, Modifier.weight(1f),
+                    g, Modifier.weight(1f), glyph,
                     onTap = { if (dir < 0) controller?.seekToPrevious() else controller?.seekToNext() },
                     onHold = { _ ->
                         haptics.tick()
@@ -357,12 +390,14 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
                 )
             }
             Spacer(Modifier.weight(0.5f))
+            // Minimal: only skip and play/pause.
+            if (layout != WpsLayout.MINIMAL) {
             CtrlButton(Modifier.weight(1f), onTap = { volumeAt = System.currentTimeMillis() }) {
-                Glyph(G.Volume, Modifier.size(36.dp), level = s.volume)
+                Glyph(G.Volume, Modifier.size(glyph), level = s.volume)
             }
             CtrlButton(Modifier.weight(1f), enabled = s.canShuffle, onTap = {
                 controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }
-            }) { Glyph(G.Shuffle, Modifier.size(36.dp), lit = s.canShuffle && s.shuffle) }
+            }) { Glyph(G.Shuffle, Modifier.size(glyph), lit = s.canShuffle && s.shuffle) }
             // cabbiev2 "repmode": Rockbox ACTION_TOUCH_REPMODE steps the Repeat
             // setting through Off, All, One, Shuffle, A-B.
             CtrlButton(Modifier.weight(1f), onTap = {
@@ -376,7 +411,8 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
                     4 -> G.RepeatAB
                     else -> G.RepeatOff
                 }
-                Glyph(g, Modifier.size(36.dp))
+                Glyph(g, Modifier.size(glyph))
+            }
             }
             CtrlButton(
                 Modifier.weight(1f),
@@ -389,14 +425,15 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
                     s.playing -> G.Pause
                     else -> G.Play
                 }
-                Glyph(g, Modifier.size(40.dp))
+                Glyph(g, Modifier.size(glyph + 4.dp))
             }
         }
+    }
     }
 }
 
 @Composable
-private fun ColumnScope.Line(text: String, scroll: Boolean = false, big: Boolean = false, dim: Boolean = false) {
+internal fun ColumnScope.Line(text: String, scroll: Boolean = false, big: Boolean = false, dim: Boolean = false) {
     if (text.isEmpty() && !scroll) return
     BasicText(
         text,
@@ -410,7 +447,7 @@ private fun ColumnScope.Line(text: String, scroll: Boolean = false, big: Boolean
 
 /** cabbiev2's popup: Browse, Quick Screen, Context Menu. */
 @Composable
-private fun PopupMenu(nav: Nav) {
+internal fun PopupMenu(nav: Nav) {
     val ctx = LocalContext.current
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Row(
@@ -469,7 +506,7 @@ private fun PopupButton(g: G, letter: String?, modifier: Modifier, onLongClick: 
 }
 
 @Composable
-private fun VolumeBar(ctx: Context, volume: Float, onTouch: () -> Unit) {
+internal fun VolumeBar(ctx: Context, volume: Float, onTouch: () -> Unit) {
     val am = remember { ctx.getSystemService(AudioManager::class.java) }
     val max = remember { am.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
@@ -568,7 +605,7 @@ private fun CtrlButton(
 
 /** Tap: [onTap]. Hold: [onHold] repeatedly with time held, then [onRelease]. */
 @Composable
-private fun SeekButton(g: G, modifier: Modifier, onTap: () -> Unit, onHold: (Long) -> Unit, onRelease: () -> Unit) {
+private fun SeekButton(g: G, modifier: Modifier, glyph: Dp, onTap: () -> Unit, onHold: (Long) -> Unit, onRelease: () -> Unit) {
     val tap by rememberUpdatedState(onTap)
     val hold by rememberUpdatedState(onHold)
     val release by rememberUpdatedState(onRelease)
@@ -591,10 +628,10 @@ private fun SeekButton(g: G, modifier: Modifier, onTap: () -> Unit, onHold: (Lon
             }
         },
         contentAlignment = Alignment.Center,
-    ) { Glyph(g, Modifier.size(36.dp)) }
+    ) { Glyph(g, Modifier.size(glyph)) }
 }
 
-private fun fmt(ms: Long): String {
+internal fun fmt(ms: Long): String {
     val t = ms / 1000
     return if (t >= 3600) "%d:%02d:%02d".format(t / 3600, (t / 60) % 60, t % 60)
     else "%d:%02d".format(t / 60, t % 60)

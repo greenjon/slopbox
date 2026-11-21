@@ -1,6 +1,6 @@
 # SlopBox UI: touch-first and themeable
 
-Status: planned 2026-11-21. Done: steps 1-7, 10, 11; step 9 started (SlopBox menu: Now Playing Gestures, Haptic Feedback). Step 4 differs from the text below: Full Path gets tappable breadcrumbs, Current Directory Only a dropdown of the folders above.
+Status: planned 2026-11-21. Done: steps 1-7, 10, 11, 13; step 9 started (SlopBox menu: Now Playing Gestures, Haptic Feedback). Step 4 differs from the text below: Full Path gets tappable breadcrumbs, Current Directory Only a dropdown of the folders above.
 
 ## Goal
 

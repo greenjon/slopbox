@@ -107,8 +107,17 @@ object Cabbie {
      */
     var safeMode by mutableStateOf(false)
 
+    /** Set by the While Playing Screen with Album Art Colours on: the art's colour, or null. */
+    var accent by mutableStateOf<Color?>(null)
+
     /** The colours to draw with. */
-    val palette: Palette get() = chosen.let { if (safeMode && !it.readable) Palette.CABBIEV2 else it }
+    val palette: Palette get() = chosen.let { if (safeMode && !it.readable) Palette.CABBIEV2 else it }.let { p ->
+        val a = accent ?: return@let p
+        p.copy(
+            selStart = lerp(a, Color.White, 0.12f), selEnd = lerp(a, Color.Black, 0.35f),
+            selText = if (a.luminance() > 0.35f) Color.Black else Color.White,
+        )
+    }
 
     /** Re-read the theme colours from the settings. */
     fun apply(store: llm.slop.slopbox.SettingsStore) {

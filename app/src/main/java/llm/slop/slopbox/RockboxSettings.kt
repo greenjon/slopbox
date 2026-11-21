@@ -458,6 +458,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "scrollbar", "scrollbar width",
             SlopBoxSettings.SWIPE_TRACKS, SlopBoxSettings.SWIPE_PLAYLIST, SlopBoxSettings.DOUBLE_TAP,
             SlopBoxSettings.LONG_PRESS, SlopBoxSettings.EDGE_VOLUME, SlopBoxSettings.HAPTICS,
+            SlopBoxSettings.ART_ACCENT, "wps",
         )
 
         @Volatile private var instance: SettingsStore? = null
@@ -485,6 +486,7 @@ object SlopBoxSettings {
     const val LONG_PRESS = "slopbox long press menu"
     const val EDGE_VOLUME = "slopbox edge volume"
     const val HAPTICS = "slopbox haptics"
+    const val ART_ACCENT = "slopbox art colours"
 
     val ALL = listOf(
         Bool(SWIPE_TRACKS, "Swipe Art to Change Track", true),
@@ -493,6 +495,7 @@ object SlopBoxSettings {
         Bool(LONG_PRESS, "Long-Press for Context Menu", true),
         Bool(EDGE_VOLUME, "Right Edge Volume", true),
         Bool(HAPTICS, "Haptic Feedback", true),
+        Bool(ART_ACCENT, "Album Art Colours on While Playing Screen", false),
     )
     /** How many of [ALL] are Now Playing gestures (the rest sit directly in the SlopBox menu). */
     private const val GESTURES = 5

@@ -159,6 +159,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
             "browse_folder" -> when (item.param) {
                 "config", "eqs" -> loader.launch(arrayOf("*/*"))
                 "themes" -> stack += Page.Themes(item.text)
+                "wps" -> stack += Page.Layouts(item.text)
                 else -> message = "${item.text}: not available in SlopBox yet."
             }
             // General Settings › Database
@@ -345,6 +346,18 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
             }
             is Page.GraphicalEq -> GraphicalEq(store)
             is Page.Colour -> ColorPicker(store, page.which) { back() }
+            is Page.Layouts -> {
+                // Rockbox lists .wps files; SlopBox has built-in layouts under skin names.
+                @Suppress("UNUSED_EXPRESSION") revision
+                val cur = WpsLayout.of(store)
+                RockList(Modifier.fillMaxSize()) {
+                    items(WpsLayout.entries) { l ->
+                        RockRow(l.title, icon = G.Config, sub = l.about, selected = l == cur) {
+                            cat.byCfg["wps"]?.let { store.setText(it, l.skin) }
+                        }
+                    }
+                }
+            }
             is Page.Themes -> {
                 val themes = remember { BundledThemes.list(ctx) }
                 val current = remember(revision) { themes.map { it.matches(store) } }
@@ -443,6 +456,7 @@ private sealed interface Page {
     /** A theme colour's picker; [which] is Rockbox's COLOR_* index. */
     data class Colour(override val title: String, val which: Int) : Page
     data class Themes(override val title: String) : Page
+    data class Layouts(override val title: String) : Page
     data class MainMenuCfg(override val title: String) : Page
     /** db_folder_select for a path-list setting; [revert] restores [revertTo] if nothing is saved. */
     data class FolderSel(override val title: String, val cfg: String, val revert: llm.slop.slopbox.RbSetting, val revertTo: Int) : Page

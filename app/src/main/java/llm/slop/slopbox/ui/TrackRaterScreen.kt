@@ -224,9 +224,16 @@ fun TrackRaterScreen(controller: MediaController?, nav: Nav) {
         items = withContext(Dispatchers.Default) { sorted(items, prefs.order) }
         busy = null
         if (items.isEmpty()) { message = if (total == 0) "Empty playlist" else "Every track in it is rated"; return@launch }
+        // The player's Shuffle would reshuffle the new playlist and undo the chosen order
+        // (the rater has its own Shuffle order), so it goes off first.
+        val store = llm.slop.slopbox.SettingsStore.get(ctx)
+        val shuffle = store.catalog.byCfg["shuffle"]
+        val wasShuffled = shuffle != null && store.int(shuffle) != 0
+        if (wasShuffled) store.set(shuffle!!, 0)
         Queue.play(c, items, 0)
         SlopPlayer.current?.markModified()
-        message = "${doc.name.substringBeforeLast('.')}: ${items.size} of $total to rate"
+        message = "${doc.name.substringBeforeLast('.')}: ${items.size} of $total to rate" +
+            if (wasShuffled) " (Shuffle turned off)" else ""
     }
 
     BackHandler(enabled = menu != null) { menu = null; prefs.save(); rev++ }

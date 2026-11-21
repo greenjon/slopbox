@@ -23,15 +23,24 @@ Much of it is written with AI help, hence the name.
 
 ## Status
 
-Early. Rockbox's codecs and DSP build for Android, and a one-screen app plays
-through them (EQ, crossfeed, tempo). Playback runs in a Media3 session
-service: it keeps playing with the screen off, shows a media notification,
-answers headset/Bluetooth/lock-screen buttons, handles audio focus and pauses
-when headphones are unplugged. Open several files to make a queue; tracks
-play gaplessly (one audio stream, the next file queued in the engine; MP3
-encoder padding is trimmed by Rockbox's codec).
+Version 1.0.0. Download the APK from
+[Releases](https://github.com/greenjon/slopbox/releases) (Android 9 or later,
+arm64 or x86_64).
 
-Tested on a Unihertz Jelly Star (Android 13, arm64).
+What's in it: Rockbox's codecs and DSP, gapless playback and crossfade;
+Rockbox's whole Settings menu, saved as `config.cfg`; a file browser, the
+database (Rockbox's `tagnavi.config` menus, with runtime data and ratings),
+playlists, bookmarks, cuesheets, A-B repeat, the sleep timer, the Quick
+Screen, Shortcuts, a customisable main menu and the System menu; and the
+music plugins Random Folder Advance, LRC Player, Last.fm Logger and Alarm
+Clock. Playback runs in a Media3 session service, so it keeps playing with
+the screen off, shows a media notification, answers
+headset/Bluetooth/lock-screen buttons, handles audio focus and pauses when
+headphones are unplugged.
+
+Tested on a Unihertz Jelly Star (Android 13, arm64) with a library of about
+5,600 tracks on an SD card. Plans for 1.1 (voice, languages, more music
+plugins, faster scans) are in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Known differences from Rockbox are listed in [docs/DIFFERENCES.md](docs/DIFFERENCES.md).
 
@@ -62,8 +71,8 @@ Rewind on Pause and Fade on Stop/Pause. Crossfade works like Rockbox's
 with crossfade on, runs the fade-out delay + duration + 1 s ahead; at a track
 change the buffered tail is faded out and the new track mixed in, with all six
 modes, both delays and durations, and Mix mode. Also in step with Rockbox:
-Single Mode, Party Mode, A-B repeat (as session commands; the playing screen
-has no buttons yet), Track Skip Beep, Auto-Change Directory, Logging, Album
+Single Mode, Party Mode, A-B repeat (with A and B buttons on the playing
+screen), Track Skip Beep, Auto-Change Directory, Logging, Album
 Art, FF/RW acceleration, playlist resume with Rewind Before Resume and Start
 Screen, Automatic Resume, cuesheets (embedded, chapters and .cue files),
 bookmarks, the sleep timer and Idle Poweroff. Playlists work like Rockbox's

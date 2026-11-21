@@ -53,10 +53,49 @@ object PluginList {
             Plugin("lastfm_scrobbler", Screen.PluginScrobbler),
             Plugin("lrcplayer", Screen.PluginLrc),
             Plugin("random_folder_advance_config", Screen.PluginRfa),
+            Plugin("track_rater", Screen.PluginRater),
         ),
     )
+    val all: List<Plugin> get() = categories.flatMap { it.second }
     /** Which plugin a plugin screen shows (Rockbox runs one plugin at a time). */
     var running by mutableStateOf<String?>(null)
+}
+
+/**
+ * Rockbox's open_plugin entries: the plugin the WPS hotkey ("wps") and the
+ * context menu items ("context") run for Open Plugin, chosen when that action
+ * is set (open_plugin_browse). Kept in SlopBox's preferences, not open_plugin.dat.
+ */
+object OpenPlugin {
+    const val WPS = "wps"
+    const val CONTEXT = "context"
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences("open_plugin", Context.MODE_PRIVATE)
+    fun get(ctx: Context, key: String) = prefs(ctx).getString(key, null)?.let { n -> PluginList.all.firstOrNull { it.name == n } }
+    fun set(ctx: Context, key: String, name: String) = prefs(ctx).edit().putString(key, name).apply()
+
+    /** open_plugin_run(): start the chosen plugin; false if none was chosen. */
+    fun run(ctx: Context, key: String, nav: Nav): Boolean {
+        val p = get(ctx, key) ?: return false
+        PluginList.running = p.name
+        nav.push(p.screen)
+        return true
+    }
+}
+
+/** open_plugin_browse(): pick the plugin Open Plugin runs. */
+@Composable
+fun OpenPluginPicker(key: String, titleBar: Boolean = true, onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    val cur = OpenPlugin.get(ctx, key)
+    BackHandler { onDone() }
+    Column(Modifier.fillMaxSize()) {
+        if (titleBar) TitleBar(str(ctx, "LANG_OPEN_PLUGIN"), onBack = onDone)
+        LazyColumn(Modifier.fillMaxSize()) {
+            items(PluginList.all) { p ->
+                RockRow(p.name, icon = G.Cursor, selected = p == cur) { OpenPlugin.set(ctx, key, p.name); onDone() }
+            }
+        }
+    }
 }
 
 /**

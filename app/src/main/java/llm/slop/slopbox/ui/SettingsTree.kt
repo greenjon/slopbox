@@ -115,17 +115,9 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
     }
 
     fun exportChangelog() {
-        val tree = MusicTree.root(ctx) ?: run { message = "Choose the music folder first."; return }
+        if (MusicTree.root(ctx) == null) { message = "Choose the music folder first."; return }
         toast(cat.str("LANG_CREATING"))
-        val ok = runCatching {
-            val text = TagDb.changelog(ctx)
-            val root = MusicTree.rootId(tree)
-            val existing = llm.slop.slopbox.FileOps.children(ctx, tree, root).firstOrNull { it.name == CHANGELOG }
-            val uri = existing?.let { MusicTree.docUri(tree, it.id) } ?: android.provider.DocumentsContract.createDocument(
-                ctx.contentResolver, MusicTree.docUri(tree, root), "text/plain", CHANGELOG)!!
-            ctx.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(text.toByteArray()) }
-        }.isSuccess
-        if (!ok) toast(cat.str("LANG_FAILED"))
+        if (!TagDb.exportChangelog(ctx)) toast(cat.str("LANG_FAILED"))
     }
 
     fun importChangelog() {
@@ -322,9 +314,15 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
             is Page.ContextItem -> {
                 // Rockbox hotkey_run_menu(HOTKEY_FLAG_WPS, execute = false): pick the action.
                 val cur = WpsContext.items(store)[page.item]
-                LazyColumn(Modifier.fillMaxSize()) {
+                var pickPlugin by remember { mutableStateOf(false) }
+                // hotkey_menu_do_setting(): Open Plugin asks which plugin (open_plugin_browse).
+                if (pickPlugin) OpenPluginPicker(if (page.item == 0) OpenPlugin.WPS else OpenPlugin.CONTEXT, titleBar = false) { back() }
+                else LazyColumn(Modifier.fillMaxSize()) {
                     items(Hotkey.entries.filter { it.wps }) { hk ->
-                        RockRow(cat.str(hk.lang), selected = hk == cur) { WpsContext.set(store, page.item, hk); back() }
+                        RockRow(cat.str(hk.lang), selected = hk == cur) {
+                            WpsContext.set(store, page.item, hk)
+                            if (hk == Hotkey.PLUGIN) pickPlugin = true else back()
+                        }
                     }
                 }
             }
@@ -447,4 +445,4 @@ private val Q_LABELS = (1..64).map { it to qFormat(it) }
 private val CUTOFF_LABELS = (20..22040 step 10).map { it to "$it Hz" }
 
 /** Rockbox TAGCACHE_FILE_CHANGELOG. */
-private const val CHANGELOG = "database_changelog.txt"
+private const val CHANGELOG = TagDb.CHANGELOG

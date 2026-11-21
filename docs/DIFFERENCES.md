@@ -209,7 +209,10 @@ Anything new goes here in the same change that introduces it.
   number spinner.
 - **Open With.** Rockbox lists its viewer plugins. SlopBox hands the file to
   another Android app through the system chooser.
-- **Open Plugin.** SlopBox has no plugins, so this item only says so.
+- **Open Plugin.** Choosing it for the WPS hotkey or a context item asks
+  which plugin, as Rockbox's open_plugin_browse does, but from SlopBox's
+  plugin list rather than a file browser over `.rock` files. The choice is
+  kept in SlopBox's preferences, not `open_plugin.dat`.
 - **Not offered.** PictureFlow, Set as Backdrop, and
   Set As › Database Directory or Recording Directory. Rockbox's Show in Files
   is offered from the playing screen and the database, as in Rockbox.
@@ -294,6 +297,17 @@ Anything new goes here in the same change that introduces it.
 - **Alarm Clock.** It counts down only while its screen is showing, so it
   keeps the phone's screen on while it waits (a Rockbox player sits in the
   plugin the same way). Touch uses the plugin library's 3x3 grid.
+- **Track Rater** (`track_rater`). Not a Rockbox plugin: SlopBox's own, for
+  rating a big collection quickly. It shows the playing track with one key
+  per star (1 to 5), stored as the Rockbox rating stars × 2, the same value
+  Set Song Rating sets. After each rating it moves to the next unrated track
+  and exports `database_changelog.txt` (Export Modifications) to the music
+  folder, so the ratings reach the card without a trip to the Database
+  menu. It also has jump keys (a set number of seconds, its own setting
+  rather than Skip Length), Undo, and Play Playlist, which plays a Playlist
+  Catalogue playlist sorted by artist, album, year or title, or shuffled,
+  without its rated tracks. Its options are kept in `track_rater.cfg` in
+  SlopBox's own storage. Tracks must be in the database to be rated.
 
 ## Interface
 

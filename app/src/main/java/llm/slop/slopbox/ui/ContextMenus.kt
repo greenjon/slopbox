@@ -233,14 +233,19 @@ fun WpsContextMenu(controller: MediaController?, nav: Nav, browser: BrowserState
     val pitchChanged = llm.slop.slopbox.Pitch.pitch != llm.slop.slopbox.Pitch.P100 ||
         llm.slop.slopbox.Pitch.stretch != llm.slop.slopbox.Pitch.P100
 
-    fun run(hk: Hotkey) {
+    fun run(hk: Hotkey, fromHotkey: Boolean = false) {
         when (hk) {
             Hotkey.VIEW_PLAYLIST -> { nav.pop(); nav.push(Screen.Playlist) }
             Hotkey.SHOW_TRACK_INFO -> { TrackInfoView.item = null; nav.pop(); nav.push(Screen.TrackInfo) }
             Hotkey.PITCHSCREEN -> if (pitchChanged) pitchMenu = true else { nav.pop(); nav.push(Screen.Pitch) }
             Hotkey.OPEN_WITH -> playingFile(controller)?.let { openWith(ctx, it.uri, it.name) }
             Hotkey.DELETE -> confirmDelete = playingFile(controller)
-            Hotkey.PLUGIN -> toast(ctx, "SlopBox has no plugins.")
+            Hotkey.PLUGIN -> {
+                // hotkey_wps_run_plugin(): the WPS hotkey's plugin, or the context menu's.
+                val key = if (fromHotkey) OpenPlugin.WPS else OpenPlugin.CONTEXT
+                nav.pop()
+                if (!OpenPlugin.run(ctx, key, nav)) toast(ctx, str(ctx, "LANG_OPEN_PLUGIN") + ": " + str(ctx, "LANG_NO_FILES"))
+            }
             Hotkey.BOOKMARK -> {
                 controller?.sendCustomCommand(SessionCommand(PlaybackService.CMD_BOOKMARK_CREATE, Bundle.EMPTY), Bundle.EMPTY)
                 nav.pop()
@@ -313,10 +318,10 @@ fun WpsContextMenu(controller: MediaController?, nav: Nav, browser: BrowserState
         when (val hk = WpsContext.items(store)[0]) {
             Hotkey.OFF -> nav.pop()
             Hotkey.PITCHSCREEN -> { nav.pop(); nav.push(Screen.Pitch) }
-            Hotkey.DELETE, Hotkey.CONTEXT_MENU -> run(hk)
+            Hotkey.DELETE, Hotkey.CONTEXT_MENU -> run(hk, fromHotkey = true)
             else -> {
                 val top = nav.top
-                run(hk)
+                run(hk, fromHotkey = true)
                 if (nav.top == top && nav.top == Screen.ContextMenu) nav.pop()
             }
         }

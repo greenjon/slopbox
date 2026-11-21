@@ -110,7 +110,16 @@ object TagDb {
         stats[id]?.let { Stats(it.playcount, it.rating, it.playtime, it.lastplayed, it.dirty) } ?: Stats()
     }
 
-    fun contains(id: String) = tracks.any { it.id == id }
+    fun contains(id: String) = track(id) != null
+
+    private var index: Pair<List<Track>, Map<String, Track>>? = null
+
+    /** The database entry for a document id, if the file is in the database. */
+    fun track(id: String): Track? {
+        val list = tracks
+        val ix = index?.takeIf { it.first === list } ?: (list to list.associateBy { it.id }).also { index = it }
+        return ix.second[id]
+    }
 
     /** Rockbox LANG_BUILDING_DATABASE, without the button hint. */
     private fun building(n: Int) = "Building database... $n found"
@@ -326,6 +335,23 @@ object TagDb {
         }
         return sb.toString()
     }
+
+    /**
+     * Export Modifications: write [changelog] to database_changelog.txt at the
+     * top of the music folder (SlopBox has no database directory on the
+     * card). False if there's no music folder or it can't be written.
+     */
+    fun exportChangelog(ctx: Context): Boolean = runCatching {
+        val tree = MusicTree.root(ctx) ?: return false
+        val text = changelog(ctx)
+        val root = MusicTree.rootId(tree)
+        val existing = llm.slop.slopbox.FileOps.children(ctx, tree, root).firstOrNull { it.name == CHANGELOG }
+        val uri = existing?.let { MusicTree.docUri(tree, it.id) } ?: android.provider.DocumentsContract.createDocument(
+            ctx.contentResolver, MusicTree.docUri(tree, root), "text/plain", CHANGELOG)!!
+        ctx.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(text.toByteArray()) }
+    }.isSuccess
+
+    const val CHANGELOG = "database_changelog.txt"
 
     /** FAT date/time (Rockbox's mtime): date in the high 16 bits, time in the low. */
     private fun fatTime(ms: Long): Long {

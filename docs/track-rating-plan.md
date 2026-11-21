@@ -1,6 +1,10 @@
 # Rating tracks in SlopBox
 
-Status: plan, nothing built. Written 2026-11-20.
+Status: built 2026-11-20. Steps 1-3 (runtime data, Set Song Rating, Export/Import Modifications, rating in
+tagnavi) were already in SlopBox; step 4 is the `track_rater` plugin (`ui/TrackRaterScreen.kt`), opened from
+Plugins › apps or the WPS hotkey set to Open Plugin. `music-catalog` reads `<card>/Music/database_changelog.txt`
+and writes its passes to `<card>/Music/Playlists/` (the Playlist Catalogue). The standalone Track Rater app is
+retired. The rest of this file is the plan as written.
 
 ## Goal
 

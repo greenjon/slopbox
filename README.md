@@ -33,7 +33,7 @@ database (Rockbox's `tagnavi.config` menus, with runtime data and ratings),
 playlists, bookmarks, cuesheets, A-B repeat, the sleep timer, the Quick
 Screen, Shortcuts, a customisable main menu and the System menu; and the
 music plugins Random Folder Advance, LRC Player, Last.fm Logger and Alarm
-Clock. Playback runs in a Media3 session service, so it keeps playing with
+Clock, plus SlopBox's own Track Rater. Playback runs in a Media3 session service, so it keeps playing with
 the screen off, shows a media notification, answers
 headset/Bluetooth/lock-screen buttons, handles audio focus and pauses when
 headphones are unplugged.
@@ -98,7 +98,8 @@ Quick Screen items. Plugins are ported one at a time in Kotlin: so far
 `random_folder_advance_config` (with Rockbox's `folder_advance_list.dat`)
 `lrcplayer` (.lrc/.lrc8/.snc/.txt and ID3 SYLT/USLT lyrics, word wipe) and
 `lastfm_scrobbler` (playback log to an Audioscrobbler `.scrobbler.log`) and
-`alarmclock`.
+`alarmclock`; plus `track_rater`, SlopBox's own (one tap per star, then the next
+unrated track; the ratings go to `database_changelog.txt` on the card).
 
 ## Layout
 

@@ -55,7 +55,7 @@ Anything new goes here in the same change that introduces it.
   touchscreen keymap for this screen is a 3x3 grid instead.
 - **Not editable yet.** Custom-type settings other than the EQ
   bands, Maximum Volume Limit, the While Playing Screen items and the
-  Quick Screen items (e.g. touchscreen calibration, colours).
+  Quick Screen items (e.g. touchscreen calibration).
 - **Automatic Resume custom folders.** "In custom directories only" opens a
   port of Rockbox's db_folder_select plugin over the music folder, and the
   list is matched as Rockbox's autoresumable() does.
@@ -326,6 +326,14 @@ Anything new goes here in the same change that introduces it.
   (Inverse) uses the foreground colour for the bar and the background
   colour for its text. The system bar icons turn dark on a light
   background.
+- **Colour picker.** Theme Settings › Colours has Rockbox's items and
+  picker: red, green and blue sliders, refusing a foreground equal to the
+  background ("Invalid colour") as Rockbox does. Components run 0–255
+  instead of the LCD's 5/6/5 bits. Touch: drag or tap a slider or step it
+  with −/+ (repeat while held), then OK or Cancel. The picker shows a sample
+  list in the new colour, and the Colours menu shows each colour's hex value.
+  Reset Colours returns to cabbiev2's colours, SlopBox's defaults, rather
+  than the LCD defaults.
 - **Playing screen popup.** cabbiev2 shows its Browse / Quick Screen /
   Context Menu popup on any touch, over the track lines. SlopBox shows it
   only for touches on the album art and track lines, so using the progress

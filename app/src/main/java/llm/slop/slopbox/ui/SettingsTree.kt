@@ -138,6 +138,9 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
             "eq_menu_graphical" -> stack += Page.GraphicalEq(item.text)
             "main_menu_config" -> stack += Page.MainMenuCfg(item.text)
             "eq_reset_defaults" -> { store.resetEq(); toast(item.text) }
+            // Theme Settings › Colours (theme_menu.c)
+            "set_color_func" -> ThemeColours.index(item.param).let { stack += Page.Colour(item.text, it) }
+            "reset_color" -> { ThemeColours.reset(store); toast(item.text) }
             "reset_settings" -> confirm = cat.str("LANG_ARE_YOU_SURE") to { store.resetAll() }
             "eq_save_preset" -> { saveMode = SettingsStore.SAVE_EQ; saver.launch("eq.cfg") }
             "write_settings_file" -> {
@@ -284,6 +287,10 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                             else -> item.text
                         },
                         icon = if (item.isMenu) G.Config else G.Cursor,
+                        trailing = if (item.function == "set_color_func") {
+                            @Suppress("UNUSED_EXPRESSION") revision
+                            "%06X".format(ThemeColours.get(store, ThemeColours.index(item.param)))
+                        } else null,
                         dim = item.isSetting && setting != null && !store.isLive(setting),
                         onLongClick = if (item.isSetting && setting != null) ({ settingMenu = item }) else null,
                     ) {
@@ -327,6 +334,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                 }
             }
             is Page.GraphicalEq -> GraphicalEq(store)
+            is Page.Colour -> ColorPicker(store, page.which) { back() }
             is Page.MainMenuCfg -> MainMenuConfig { stack.removeAt(stack.lastIndex) }
             is Page.FolderSel -> {
                 val target = cat.byCfg[page.cfg]
@@ -406,6 +414,8 @@ private sealed interface Page {
     data class SimpleEq(override val title: String) : Page
     data class ContextItem(val item: Int) : Page { override val title get() = "" }
     data class GraphicalEq(override val title: String) : Page
+    /** A theme colour's picker; [which] is Rockbox's COLOR_* index. */
+    data class Colour(override val title: String, val which: Int) : Page
     data class MainMenuCfg(override val title: String) : Page
     /** db_folder_select for a path-list setting; [revert] restores [revertTo] if nothing is saved. */
     data class FolderSel(override val title: String, val cfg: String, val revert: llm.slop.slopbox.RbSetting, val revertTo: Int) : Page

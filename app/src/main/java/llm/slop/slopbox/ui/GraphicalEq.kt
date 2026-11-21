@@ -135,7 +135,7 @@ fun GraphicalEq(store: SettingsStore) {
 
 /** A button that acts on press and repeats while held (ACTION_SETTINGS_INCREPEAT). */
 @Composable
-private fun RepeatButton(label: String, modifier: Modifier, onStep: () -> Unit) {
+internal fun RepeatButton(label: String, modifier: Modifier, onStep: () -> Unit) {
     val step by rememberUpdatedState(onStep)
     Box(modifier.fillMaxHeight().background(Cabbie.Gold).pointerInput(Unit) {
         coroutineScope {

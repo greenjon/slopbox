@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -6,10 +7,30 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// Release signing: key.properties (local, gitignored) or KEYSTORE_PATH/KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD
+// (CI with secrets). With neither, a release build is unsigned and can't be installed.
+val keyProps = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun signingValue(env: String, prop: String): String? = System.getenv(env)?.takeIf { it.isNotEmpty() } ?: keyProps.getProperty(prop)
+
 android {
     namespace = "llm.slop.slopbox"
     compileSdk = 36
     ndkVersion = "29.0.14206865"
+
+    signingConfigs {
+        create("release") {
+            val store = signingValue("KEYSTORE_PATH", "storeFile")
+            if (store != null && file(store).exists()) {
+                storeFile = file(store)
+                storePassword = signingValue("KEYSTORE_PASSWORD", "storePassword")
+                keyAlias = signingValue("KEY_ALIAS", "keyAlias")
+                keyPassword = signingValue("KEY_PASSWORD", "keyPassword")
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "llm.slop.slopbox"
@@ -18,6 +39,9 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.0.1"
+        // ./gradlew assembleDebug -PappIdSuffix=.ui installs next to the main
+        // build, so two lines of work (or a release check) can share one phone.
+        (project.findProperty("appIdSuffix") as String?)?.let { applicationIdSuffix = it }
 
         ndk {
             // Must match what android-native/build_rockbox.sh built.
@@ -38,10 +62,8 @@ android {
     }
 
     buildTypes {
-        debug {
-            // ./gradlew assembleDebug -PappIdSuffix=.ui installs next to the main
-            // debug build, so two lines of work can share one phone.
-            (project.findProperty("appIdSuffix") as String?)?.let { applicationIdSuffix = it }
+        release {
+            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
         }
     }
 

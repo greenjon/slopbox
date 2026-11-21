@@ -111,6 +111,11 @@ android-native/build_rockbox.sh          # Rockbox for arm64-v8a + x86_64
 ./gradlew assembleDebug                  # needs JDK 17 and NDK 29.0.14206865
 ```
 
+Releases are built and signed locally with `scripts/release.sh 1.0.0`,
+which needs the release key in `key.properties` (not in the repository).
+GitHub Actions builds the codecs, runs the tests and builds a debug APK on
+every push.
+
 Codecs ship in the APK as `lib/<abi>/libsb_<codec>.so` and are loaded with
 `dlopen`, the same way Rockbox's hosted builds load `.codec` files.
 

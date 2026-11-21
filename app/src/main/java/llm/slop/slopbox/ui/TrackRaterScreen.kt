@@ -213,6 +213,41 @@ fun TrackRaterScreen(controller: MediaController?, nav: Nav) {
         if (i != null && i != c.currentMediaItemIndex) { c.seekTo(i, 0); c.play() }
     }
 
+    /** The last playlist Play Playlist loaded, in its file's order (for Order › Playlist Order). */
+    var loaded by remember { mutableStateOf<List<MediaItem>?>(null) }
+
+    /** Turn the player's Shuffle off (it would reshuffle a new queue); true if it was on. */
+    fun shuffleOff(): Boolean {
+        val store = llm.slop.slopbox.SettingsStore.get(ctx)
+        val shuffle = store.catalog.byCfg["shuffle"] ?: return false
+        if (store.int(shuffle) == 0) return false
+        store.set(shuffle, 0)
+        return true
+    }
+
+    /** Order changed: sort the queue that's playing now, keeping the current track and its place. */
+    fun resortQueue() = scope.launch {
+        val c = controller ?: return@launch
+        val n = c.mediaItemCount
+        if (n < 2) return@launch
+        val now = (0 until n).map { c.getMediaItemAt(it) }
+        val ids = now.map { it.mediaId }.toSet()
+        val base = if (RaterPrefs.ORDERS[prefs.order] == "Playlist Order")
+            loaded?.filter { it.mediaId in ids }?.takeIf { it.size == n } ?: return@launch
+        else now
+        val list = withContext(Dispatchers.Default) { sorted(base, prefs.order) }
+        val currentId = c.currentMediaItem?.mediaId
+        val at = list.indexOfFirst { it.mediaId == currentId }.coerceAtLeast(0)
+        val pos = c.currentPosition
+        val wasPlaying = c.playWhenReady
+        val wasShuffled = shuffleOff()
+        c.setMediaItems(list, at, pos)
+        c.prepare()
+        c.playWhenReady = wasPlaying
+        SlopPlayer.current?.markModified()
+        message = "Queue sorted: ${RaterPrefs.ORDERS[prefs.order]}" + if (wasShuffled) " (Shuffle turned off)" else ""
+    }
+
     /** Play a catalog playlist in the chosen order, without its rated tracks if Skip Rated is on. */
     fun playPlaylist(doc: Doc) = scope.launch {
         val c = controller ?: return@launch
@@ -221,15 +256,13 @@ fun TrackRaterScreen(controller: MediaController?, nav: Nav) {
         var items = PlaylistFiles.load(ctx, tree, doc.id, doc.name)
         val total = items.size
         if (prefs.skipRated) items = items.filter { !rated(it.mediaId) }
+        loaded = items
         items = withContext(Dispatchers.Default) { sorted(items, prefs.order) }
         busy = null
         if (items.isEmpty()) { message = if (total == 0) "Empty playlist" else "Every track in it is rated"; return@launch }
         // The player's Shuffle would reshuffle the new playlist and undo the chosen order
         // (the rater has its own Shuffle order), so it goes off first.
-        val store = llm.slop.slopbox.SettingsStore.get(ctx)
-        val shuffle = store.catalog.byCfg["shuffle"]
-        val wasShuffled = shuffle != null && store.int(shuffle) != 0
-        if (wasShuffled) store.set(shuffle!!, 0)
+        val wasShuffled = shuffleOff()
         Queue.play(c, items, 0)
         SlopPlayer.current?.markModified()
         message = "${doc.name.substringBeforeLast('.')}: ${items.size} of $total to rate" +
@@ -287,8 +320,11 @@ fun TrackRaterScreen(controller: MediaController?, nav: Nav) {
                 RockList(Modifier.fillMaxSize()) {
                     items(labels.indices.toList()) { i ->
                         RockRow(labels[i], selected = i == cur) {
+                            val reorder = m == "order" && i != prefs.order
                             if (m == "order") prefs.order = i else prefs.jumpSec = RaterPrefs.JUMPS[i]
                             prefs.save(); rev++; menu = "menu"
+                            // A new order applies to what's playing now, not only the next Play Playlist.
+                            if (reorder) resortQueue()
                         }
                     }
                 }

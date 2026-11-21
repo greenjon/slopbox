@@ -310,8 +310,10 @@ Anything new goes here in the same change that introduces it.
   menu. It also has jump keys (a set number of seconds, its own setting
   rather than Skip Length), Undo, and Play Playlist, which plays a Playlist
   Catalogue playlist sorted by artist, album, year or title, or shuffled,
-  without its rated tracks. Play Playlist turns the player's Shuffle off,
-  since Shuffle would reshuffle the new playlist and lose that order. Its options are kept in `track_rater.cfg` in
+  without its rated tracks. Changing the order also sorts the queue that's
+  playing, keeping the current track. Play Playlist (and a new order) turn
+  the player's Shuffle off, since Shuffle would reshuffle the new playlist
+  and lose that order. Its options are kept in `track_rater.cfg` in
   SlopBox's own storage. Tracks must be in the database to be rated.
 
 ## Interface

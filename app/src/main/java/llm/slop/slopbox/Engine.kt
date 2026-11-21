@@ -109,6 +109,36 @@ object Engine {
     private const val DUCK_DB = -12
 
     private external fun nativeInit()
+    private external fun nativeSetRockboxDir(dir: String)
+    private external fun nativeSetCodepage(cp: Int)
+
+    @Volatile private var prepared = false
+
+    /**
+     * Rockbox's data files the engine reads (the codepage tables made by
+     * Rockbox's tools/codepages), copied from the APK into the app's own
+     * ROCKBOX_DIR.
+     */
+    fun prepare(ctx: android.content.Context) {
+        if (prepared) return
+        synchronized(this) {
+            if (prepared) return
+            val dir = java.io.File(ctx.filesDir, "rockbox")
+            val cpDir = java.io.File(dir, "codepages").apply { mkdirs() }
+            runCatching {
+                for (name in ctx.assets.list("codepages").orEmpty()) {
+                    val f = java.io.File(cpDir, name)
+                    val bytes = ctx.assets.open("codepages/$name").use { it.readBytes() }
+                    if (!f.exists() || f.length() != bytes.size.toLong()) f.writeBytes(bytes)
+                }
+            }
+            nativeSetRockboxDir(dir.absolutePath)
+            prepared = true
+        }
+    }
+
+    /** Rockbox set_codepage() ("Default Codepage"). */
+    fun setCodepage(cp: Int) = nativeSetCodepage(cp)
     private external fun nativePlayFd(fd: Int, name: String, startMs: Long, paused: Boolean): Int
     private external fun nativeSkipTo(fd: Int, name: String, startMs: Long): Int
     private external fun nativeStop()

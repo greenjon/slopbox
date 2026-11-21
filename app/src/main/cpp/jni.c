@@ -172,11 +172,50 @@ static void stop_locked(void)
     out = NULL;
 }
 
+/*
+ * A Java string from Rockbox's UTF-8 text. NewStringUTF() takes only Java's
+ * "modified UTF-8" and aborts the app on anything else (emoji, invalid
+ * bytes from a tag in another codepage), so decode through String(byte[],
+ * "UTF-8"), which replaces what it can't read.
+ */
+static jstring jstr(JNIEnv *env, const char *s)
+{
+    if (s == NULL)
+        s = "";
+    size_t n = strlen(s);
+    jbyteArray bytes = (*env)->NewByteArray(env, (jsize)n);
+    if (bytes == NULL)
+        return NULL;
+    (*env)->SetByteArrayRegion(env, bytes, 0, (jsize)n, (const jbyte *)s);
+    jclass cls = (*env)->FindClass(env, "java/lang/String");
+    jmethodID ctor = (*env)->GetMethodID(env, cls, "<init>", "([BLjava/lang/String;)V");
+    jstring cs = (*env)->NewStringUTF(env, "UTF-8");
+    jstring out = (jstring)(*env)->NewObject(env, cls, ctor, bytes, cs);
+    (*env)->DeleteLocalRef(env, bytes);
+    (*env)->DeleteLocalRef(env, cs);
+    (*env)->DeleteLocalRef(env, cls);
+    return out;
+}
+
 JNIEXPORT void JNICALL
 Java_llm_slop_slopbox_Engine_nativeInit(JNIEnv *env, jobject thiz)
 {
     /* Codecs ship in the APK as lib/<abi>/libsb_<codec>.so. */
     sb_engine_init("libsb_%s.so");
+}
+
+JNIEXPORT void JNICALL
+Java_llm_slop_slopbox_Engine_nativeSetRockboxDir(JNIEnv *env, jobject thiz, jstring jdir)
+{
+    const char *dir = (*env)->GetStringUTFChars(env, jdir, NULL);
+    sb_set_rockbox_dir(dir);
+    (*env)->ReleaseStringUTFChars(env, jdir, dir);
+}
+
+JNIEXPORT void JNICALL
+Java_llm_slop_slopbox_Engine_nativeSetCodepage(JNIEnv *env, jobject thiz, jint cp)
+{
+    sb_set_codepage(cp);
 }
 
 /* Start fresh with this file. Returns its serial, or -1. */
@@ -318,16 +357,16 @@ Java_llm_slop_slopbox_Engine_nativeTrackInfo(JNIEnv *env, jobject thiz)
     jclass str = (*env)->FindClass(env, "java/lang/String");
     jobjectArray a = (*env)->NewObjectArray(env, 7, str, NULL);
     char num[32];
-    (*env)->SetObjectArrayElement(env, a, 0, (*env)->NewStringUTF(env, info.title));
-    (*env)->SetObjectArrayElement(env, a, 1, (*env)->NewStringUTF(env, info.artist));
-    (*env)->SetObjectArrayElement(env, a, 2, (*env)->NewStringUTF(env, info.album));
-    (*env)->SetObjectArrayElement(env, a, 3, (*env)->NewStringUTF(env, info.codec));
+    (*env)->SetObjectArrayElement(env, a, 0, jstr(env, info.title));
+    (*env)->SetObjectArrayElement(env, a, 1, jstr(env, info.artist));
+    (*env)->SetObjectArrayElement(env, a, 2, jstr(env, info.album));
+    (*env)->SetObjectArrayElement(env, a, 3, jstr(env, info.codec));
     snprintf(num, sizeof(num), "%lu", info.length_ms);
-    (*env)->SetObjectArrayElement(env, a, 4, (*env)->NewStringUTF(env, num));
+    (*env)->SetObjectArrayElement(env, a, 4, jstr(env, num));
     snprintf(num, sizeof(num), "%lu", info.frequency);
-    (*env)->SetObjectArrayElement(env, a, 5, (*env)->NewStringUTF(env, num));
+    (*env)->SetObjectArrayElement(env, a, 5, jstr(env, num));
     snprintf(num, sizeof(num), "%d", info.bitrate);
-    (*env)->SetObjectArrayElement(env, a, 6, (*env)->NewStringUTF(env, num));
+    (*env)->SetObjectArrayElement(env, a, 6, jstr(env, num));
     return a;
 }
 
@@ -454,7 +493,7 @@ Java_llm_slop_slopbox_Engine_nativeReadTags(JNIEnv *env, jobject thiz,
     jclass str = (*env)->FindClass(env, "java/lang/String");
     jobjectArray a = (*env)->NewObjectArray(env, n, str, NULL);
     for (int i = 0; i < n; i++) {
-        jstring js = (*env)->NewStringUTF(env, strs[i]);
+        jstring js = jstr(env, strs[i]);
         (*env)->SetObjectArrayElement(env, a, i, js);
         (*env)->DeleteLocalRef(env, js);
     }
@@ -486,20 +525,20 @@ Java_llm_slop_slopbox_Engine_nativeReadEmbeddedCue(JNIEnv *env, jobject thiz,
         char num[32];
         if (cue.kind == 1) {
             a = (*env)->NewObjectArray(env, 4, str, NULL);
-            (*env)->SetObjectArrayElement(env, a, 0, (*env)->NewStringUTF(env, "text"));
+            (*env)->SetObjectArrayElement(env, a, 0, jstr(env, "text"));
             snprintf(num, sizeof(num), "%ld", cue.pos);
-            (*env)->SetObjectArrayElement(env, a, 1, (*env)->NewStringUTF(env, num));
+            (*env)->SetObjectArrayElement(env, a, 1, jstr(env, num));
             snprintf(num, sizeof(num), "%d", cue.size);
-            (*env)->SetObjectArrayElement(env, a, 2, (*env)->NewStringUTF(env, num));
+            (*env)->SetObjectArrayElement(env, a, 2, jstr(env, num));
             snprintf(num, sizeof(num), "%d", cue.encoding);
-            (*env)->SetObjectArrayElement(env, a, 3, (*env)->NewStringUTF(env, num));
+            (*env)->SetObjectArrayElement(env, a, 3, jstr(env, num));
         } else {
             a = (*env)->NewObjectArray(env, 1 + cue.count * 2, str, NULL);
-            (*env)->SetObjectArrayElement(env, a, 0, (*env)->NewStringUTF(env, "chapters"));
+            (*env)->SetObjectArrayElement(env, a, 0, jstr(env, "chapters"));
             for (int i = 0; i < cue.count; i++) {
                 snprintf(num, sizeof(num), "%lu", cue.chapters[i].ms);
-                jstring n = (*env)->NewStringUTF(env, num);
-                jstring t = (*env)->NewStringUTF(env, cue.chapters[i].title);
+                jstring n = jstr(env, num);
+                jstring t = jstr(env, cue.chapters[i].title);
                 (*env)->SetObjectArrayElement(env, a, 1 + i * 2, n);
                 (*env)->SetObjectArrayElement(env, a, 2 + i * 2, t);
                 (*env)->DeleteLocalRef(env, n);

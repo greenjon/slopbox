@@ -361,11 +361,14 @@ class SettingsStore private constructor(private val context: Context, val catalo
         s.cfg in ENGINE_IDS || s.cfg in PLAYER_SETTINGS || s.cfg?.startsWith("eq filter ") == true
 
     fun applyAllToEngine() {
+        Engine.prepare(context)
+        catalog.byCfg["default codepage"]?.let { Engine.setCodepage(int(it)) }
         for (s in catalog.settings) applyToEngine(s)
     }
 
     private fun applyToEngine(s: RbSetting) {
         val cfg = s.cfg ?: return
+        if (cfg == "default codepage") { Engine.prepare(context); Engine.setCodepage(int(s)); return }
         ENGINE_IDS[cfg]?.let { id ->
             val v = if (s.isCustom) text(s).trim().toIntOrNull() ?: 0 else int(s)
             Engine.setSetting(id, v)
@@ -426,7 +429,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "context_wps", "Semitone pitch change", "Timestretch mode",
             "start directory", "playlist catalog directory", "gather runtime data",
             "qs top", "qs left", "qs right", "qs bottom", "shortcuts instead of quickscreen",
-            "autoresume next track paths", "sort case", "sort dirs", "sort files", "sort interpret number", "show files",
+            "autoresume next track paths", "default codepage", "sort case", "sort dirs", "sort files", "sort interpret number", "show files",
             "show filename exts", "follow playlist", "show path in browser", "keep directory", "show icons",
         )
 

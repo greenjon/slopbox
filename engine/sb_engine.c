@@ -30,6 +30,7 @@
 #include "kernel.h"
 #include "core_alloc.h"
 #include "codecs.h"
+#include "rbunicode.h"
 #include "dsp_core.h"
 #include "dsp_misc.h"
 #include "eq.h"
@@ -90,6 +91,41 @@ int find_first_set_bit(uint32_t value)
     if (value == 0)
         return 32;
     return __builtin_ctz(value);
+}
+
+/* Where Rockbox's ROCKBOX_DIR ("/.rockbox") lives for SlopBox: the app's own
+ * storage (set by the app before anything reads codepage tables). */
+static char rockbox_dir[512];
+
+void sb_set_rockbox_dir(const char *dir)
+{
+    snprintf(rockbox_dir, sizeof(rockbox_dir), "%s", dir);
+}
+
+/* open() for Rockbox code that reads its data files (unicode.c's codepage
+ * tables): ROCKBOX_DIR paths are moved into the app's storage. */
+int sb_rb_open(const char *path, int flags, ...)
+{
+    char real[1024];
+    size_t n = strlen(ROCKBOX_DIR);
+    if (rockbox_dir[0] && strncmp(path, ROCKBOX_DIR, n) == 0 && (path[n] == '/' || path[n] == '\0')) {
+        snprintf(real, sizeof(real), "%s%s", rockbox_dir, path + n);
+        path = real;
+    }
+    mode_t mode = 0;
+    if (flags & O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = (mode_t)va_arg(ap, int);
+        va_end(ap);
+    }
+    return open(path, flags, mode);
+}
+
+/* Rockbox set_codepage(): the "Default Codepage" for tags without an encoding. */
+void sb_set_codepage(int cp)
+{
+    set_codepage(cp);
 }
 
 off_t ffilesize(int fd)

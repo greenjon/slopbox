@@ -76,6 +76,10 @@ Anything new goes here in the same change that introduces it.
   Rockbox viewer plugins aren't ported. Sort By Type orders playlists, then
   audio, then the other known types, then unknown ones.
 
+- **Default Codepage.** Tags without an encoding are read through Rockbox's
+  own codepage tables, made at build time by Rockbox's `tools/codepages` and
+  kept in SlopBox's storage rather than `/.rockbox/codepages`.
+
 ## Playback settings
 
 - **Shuffle.** Tracks added while shuffled are appended to the remembered

@@ -58,3 +58,10 @@ target_link_libraries(slopbox
     aaudio log dl m
 )
 target_link_options(slopbox PRIVATE "-Wl,-z,max-page-size=16384")
+
+# Rockbox's unicode.c reads its codepage tables from ROCKBOX_DIR "/codepages"
+# with open(); point that at the app's own storage (sb_rb_open() in
+# sb_engine.c) without changing Rockbox's source. Fortify off for this one
+# file so open() is a plain call that can be renamed.
+set_source_files_properties(${RB}/firmware/common/unicode.c PROPERTIES
+    COMPILE_OPTIONS "-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=0;-Dopen=sb_rb_open")

@@ -75,6 +75,18 @@ val copyRockboxAssets by tasks.registering(Copy::class) {
 android.sourceSets["main"].assets.srcDir(rockboxAssets)
 tasks.named("preBuild") { dependsOn(copyRockboxAssets) }
 
+// Rockbox's codepage tables, made by its own tools/codepages (Default Codepage).
+val codepageAssets = layout.buildDirectory.dir("generated/codepageAssets")
+val makeCodepages by tasks.registering(Exec::class) {
+    val out = codepageAssets.map { it.dir("codepages") }
+    inputs.file(rootProject.file("third_party/rockbox/tools/codepages.c"))
+    inputs.file(rootProject.file("third_party/rockbox/tools/codepage_tables.c"))
+    outputs.dir(out)
+    commandLine(rootProject.file("android-native/make_codepages.sh").absolutePath, out.get().asFile.absolutePath)
+}
+android.sourceSets["main"].assets.srcDir(codepageAssets)
+tasks.named("preBuild") { dependsOn(makeCodepages) }
+
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)

@@ -113,4 +113,8 @@ void sb_set_duck_db(int db);
 }
 #endif
 
+/* ROCKBOX_DIR for Rockbox's data files (codepage tables), and the Default Codepage. */
+void sb_set_rockbox_dir(const char *dir);
+void sb_set_codepage(int cp);
+
 #endif

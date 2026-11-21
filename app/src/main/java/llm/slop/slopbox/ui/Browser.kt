@@ -265,7 +265,7 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
         when {
             list == null -> ListNote("Loading…")
             list.isEmpty() -> ListNote(fv.catalog.str("LANG_NO_FILES"))
-            else -> LazyColumn(Modifier.fillMaxSize(), state = listState) {
+            else -> RockList(Modifier.fillMaxSize(), state = listState, label = { i -> list.getOrNull(i)?.let { initial(FileView.displayName(it, fv)) } }) {
                 items(list, key = { it.id }) { e ->
                     val sel = state.cursor[dir.id]?.let { it == e.id } ?: (e.id == playingId)
                     RockRow(
@@ -408,7 +408,7 @@ private fun FileViewer(tree: Uri, doc: Doc, nav: Nav, onBack: () -> Unit) {
             Column(Modifier.fillMaxSize()) {
                 TitleBar(doc.name, onBack = onBack)
                 if (cue == null) { ListNote(st.catalog.str("LANG_FAILED")); return@Column }
-                LazyColumn(Modifier.fillMaxSize()) {
+                RockList(Modifier.fillMaxSize()) {
                     item { RockRow("Title: ${cue.title}") {} }
                     item { RockRow("Artist: ${cue.performer}") {} }
                     items(cue.tracks.size) { i ->
@@ -424,7 +424,7 @@ private fun FileViewer(tree: Uri, doc: Doc, nav: Nav, onBack: () -> Unit) {
             Column(Modifier.fillMaxSize()) {
                 TitleBar(doc.name.substringBeforeLast('.'), onBack = onBack)
                 if (lines.isEmpty()) ListNote(st.catalog.str("LANG_BOOKMARK_LOAD_EMPTY"))
-                LazyColumn(Modifier.fillMaxSize()) {
+                RockList(Modifier.fillMaxSize()) {
                     items(lines) { l ->
                         val bm = llm.slop.slopbox.Bookmarks.parse(l)
                         RockRow(bm?.title ?: l, sub = bm?.let { "%d:%02d, %d".format(it.elapsedMs / 60000, (it.elapsedMs / 1000) % 60, it.index + 1) }) {

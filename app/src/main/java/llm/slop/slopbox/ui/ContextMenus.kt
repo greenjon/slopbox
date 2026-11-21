@@ -182,7 +182,7 @@ fun HotkeyList(title: String, execute: Boolean, current: Hotkey?, onBack: () -> 
     val list = Hotkey.entries.filter { it.wps && !(execute && (it == Hotkey.OFF || it == Hotkey.CONTEXT_MENU)) }
     Column(Modifier.fillMaxSize()) {
         TitleBar(title, onBack = onBack)
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             items(list) { hk -> RockRow(str(ctx, hk.lang), selected = hk == current) { onPick(hk) } }
         }
     }
@@ -284,7 +284,7 @@ fun WpsContextMenu(controller: MediaController?, nav: Nav, browser: BrowserState
         val cur = llm.slop.slopbox.ui.db.TagDb.statsOf(playingId).rating
         Column(Modifier.fillMaxSize()) {
             TitleBar(str(ctx, "LANG_MENU_SET_RATING"), onBack = { rating = false })
-            LazyColumn(Modifier.fillMaxSize(), state = rememberLazyListState(cur.coerceAtMost(6))) {
+            RockList(Modifier.fillMaxSize(), state = rememberLazyListState(cur.coerceAtMost(6))) {
                 items((0..10).toList()) { v ->
                     RockRow(v.toString(), selected = v == cur) {
                         llm.slop.slopbox.ui.db.TagDb.setRating(ctx, playingId, v)
@@ -331,7 +331,7 @@ fun WpsContextMenu(controller: MediaController?, nav: Nav, browser: BrowserState
     val cue = SlopPlayer.current?.cuesheet
     Column(Modifier.fillMaxSize()) {
         TitleBar(str(ctx, "LANG_ONPLAY_MENU_TITLE"), onBack = { nav.pop() })
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             item { RockRow(str(ctx, "LANG_CURRENT_PLAYLIST"), icon = G.ListC) { nav.pop(); nav.push(Screen.CurrentPlaylist) } }
             item {
                 RockRow(str(ctx, "LANG_ADD_TO_PL"), icon = G.ListC) {
@@ -451,7 +451,7 @@ fun TrackInfoScreen(controller: MediaController?, nav: Nav) {
         when {
             r == null -> ListNote("Loading…")
             r.isEmpty() -> ListNote(str(ctx, "LANG_ID3_NO_INFO"))
-            else -> LazyColumn(Modifier.fillMaxSize()) {
+            else -> RockList(Modifier.fillMaxSize()) {
                 items(r) { (label, value) ->
                     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
                         BasicText(label, style = Cabbie.small.copy(color = Cabbie.Dim))
@@ -495,7 +495,7 @@ fun CuesheetScreen(controller: MediaController?, nav: Nav) {
     val state = rememberLazyListState((current - 2).coerceAtLeast(0))
     Column(Modifier.fillMaxSize()) {
         TitleBar("${cue.performer}: ${cue.title}", onBack = { nav.pop() })
-        LazyColumn(Modifier.fillMaxSize(), state = state) {
+        RockList(Modifier.fillMaxSize(), state = state) {
             itemsIndexed(cue.tracks) { i, t ->
                 RockRow("%02d. %s".format(i + 1, t.performer), selected = i == current) {
                     p.seekToCue(t.offsetMs); nav.pop()
@@ -602,7 +602,7 @@ fun TreeContextMenu(
     val clip = FileOps.Clipboard.doc
     Column(Modifier.fillMaxSize()) {
         TitleBar(if (doc.isDir) doc.name else doc.name.substringBeforeLast('.'), onBack = { onClose(false) })
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             if (doc.isPlaylist) item { RockRow(str(ctx, "LANG_VIEW"), icon = G.ListC, onClick = onView) }
             item { RockRow(str(ctx, "LANG_PLAYING_NEXT"), icon = G.Cursor, onClick = onPlayingNext) }
             item {
@@ -703,7 +703,7 @@ fun PropertiesScreen(tree: Uri, doc: Doc, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         TitleBar(str(ctx, if (doc.isDir) "LANG_PROPERTIES_DIRECTORY_PROPERTIES" else "LANG_PROPERTIES_FILE_PROPERTIES"), onBack = onBack)
         val r = rows
-        if (r == null) ListNote(str(ctx, "LANG_WAIT")) else LazyColumn(Modifier.fillMaxSize()) {
+        if (r == null) ListNote(str(ctx, "LANG_WAIT")) else RockList(Modifier.fillMaxSize()) {
             items(r) { (label, value) ->
                 Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
                     BasicText(label, style = Cabbie.small.copy(color = Cabbie.Dim))
@@ -754,7 +754,7 @@ fun ViewerTrackMenu(
     }
     Column(Modifier.fillMaxSize()) {
         TitleBar(str(ctx, "LANG_PLAYLIST"), onBack = onBack)
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             item { RockRow(str(ctx, "LANG_PLAYING_NEXT"), icon = G.Cursor) { page = "next" } }
             item {
                 RockRow(str(ctx, "LANG_ADD_TO_PL"), icon = G.Cursor) {

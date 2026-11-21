@@ -97,7 +97,7 @@ fun PlaylistScreen(controller: MediaController?, nav: Nav) {
         TitleBar(if (moving != null) store.catalog.str("LANG_MOVE") else "Playlist (${items.size})",
             onBack = { if (moving != null) moving = null else nav.pop() })
         if (items.isEmpty()) ListNote("The playlist is empty.")
-        LazyColumn(Modifier.fillMaxSize(), state = listState) {
+        RockList(Modifier.fillMaxSize(), state = listState) {
             itemsIndexed(items) { i, item ->
                 RockRow(
                     trackLabel(ctx, item, i),

@@ -453,6 +453,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "show filename exts", "follow playlist", "show path in browser", "keep directory", "show icons", "statusbar",
             "foreground color", "background color", "line selector start color", "line selector end color",
             "line selector text color", "list separator color", "list separator height", "selector type",
+            "scrollbar", "scrollbar width",
         )
 
         @Volatile private var instance: SettingsStore? = null

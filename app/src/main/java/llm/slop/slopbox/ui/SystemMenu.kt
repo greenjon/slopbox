@@ -94,7 +94,7 @@ private fun AboutScreen(onBack: () -> Unit) {
     )
     Column(Modifier.fillMaxSize()) {
         TitleBar("About SlopBox", onBack = onBack)
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             items(paragraphs) { p ->
                 BasicText(p, Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), style = Cabbie.body)
             }
@@ -113,7 +113,7 @@ private fun TextFileScreen(title: String, assets: List<String>, onBack: () -> Un
     }
     Column(Modifier.fillMaxSize()) {
         TitleBar(title, onBack = onBack)
-        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
+        RockList(Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
             items(lines) { l -> BasicText(l, style = Cabbie.small) }
         }
     }
@@ -173,7 +173,7 @@ private fun InfoScreen(onBack: () -> Unit) {
     }
     Column(Modifier.fillMaxSize()) {
         TitleBar("SlopBox Info", onBack = onBack)
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             items(lines) { l -> RockRow(l) { tick++ } }
         }
     }

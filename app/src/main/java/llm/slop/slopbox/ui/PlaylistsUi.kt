@@ -141,7 +141,7 @@ fun CatalogScreen(controller: MediaController?, nav: Nav) {
                 ListNote(str(ctx, "LANG_CATALOG_NO_PLAYLISTS"))
                 if (!PlaylistFiles.writable(ctx, tree)) ListNote("To save playlists, choose the music folder again (Settings › General Settings › Database › Select directories to scan).")
             }
-            else -> LazyColumn(Modifier.fillMaxSize()) {
+            else -> RockList(Modifier.fillMaxSize(), label = { i -> list!!.getOrNull(i)?.let { initial(it.name) } }) {
                 items(list!!) { d ->
                     RockRow(d.name.substringBeforeLast('.'), icon = G.ListC, onLongClick = { menuFor = d }) { viewing = d }
                 }
@@ -211,7 +211,7 @@ private fun PlaylistFileScreen(controller: MediaController?, nav: Nav, tree: Uri
         TitleBar(if (moving != null) str(ctx, "LANG_MOVE") else doc.name.substringBeforeLast('.'),
             onBack = { if (moving != null) moving = null else leave() })
         val l = items
-        if (l == null) ListNote("Loading…") else LazyColumn(Modifier.fillMaxSize()) {
+        if (l == null) ListNote("Loading…") else RockList(Modifier.fillMaxSize()) {
             itemsIndexed(l) { i, item ->
                 RockRow(trackLabel(ctx, item, i), icon = G.TangoNote, selected = i == moving,
                     onLongClick = { menuFor = i }) {
@@ -341,7 +341,7 @@ fun AddToPlaylistScreen(nav: Nav) {
                 TitleBar(str(ctx, "LANG_ADD_TO_EXISTING_PL"), onBack = { picking = false })
                 val list = remember { PlaylistFiles.catalog(ctx, tree).map { it.first } }
                 if (list.isEmpty()) ListNote(str(ctx, "LANG_CATALOG_NO_PLAYLISTS"))
-                LazyColumn(Modifier.fillMaxSize()) {
+                RockList(Modifier.fillMaxSize()) {
                     items(list) { d ->
                         RockRow(d.name.substringBeforeLast('.'), icon = G.ListC) {
                             scope.launch { done(PlaylistFiles.append(ctx, tree, d.id, d.name, paths)) }
@@ -422,7 +422,7 @@ private fun SearchPlaylistScreen(controller: MediaController?, nav: Nav, onBack:
     Column(Modifier.fillMaxSize()) {
         TitleBar(str(ctx, "LANG_SEARCH_RESULTS"), onBack = onBack)
         ListNote(str(ctx, "LANG_PLAYLIST_SEARCH_MSG").replace("%d", found.size.toString()).replace(" (%s)", ""))
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             items(found) { i ->
                 val item = c!!.getMediaItemAt(i)
                 val path = item.requestMetadata.mediaUri?.let { PlaybackMemory.pathOf(it) } ?: item.mediaId

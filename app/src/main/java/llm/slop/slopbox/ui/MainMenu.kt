@@ -169,7 +169,7 @@ fun MainMenuConfig(onDone: () -> Unit) {
     @Suppress("UNUSED_EXPRESSION") rev
     Column(Modifier.fillMaxSize()) {
         TitleBar(str("LANG_MAIN_MENU"), onBack = { leave() })
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             itemsIndexed(items) { i, it ->
                 RockRow("${RootMenu.title(store, it.id)}: ${str(if (it.on) "LANG_ON" else "LANG_OFF")}",
                     icon = if (it.on) G.Config else null, forceIcon = true,

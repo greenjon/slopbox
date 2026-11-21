@@ -87,7 +87,7 @@ fun GraphicalEq(store: SettingsStore) {
 
     Column(Modifier.fillMaxSize()) {
         BasicText(modeLine, Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = Cabbie.body)
-        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+        RockList(Modifier.weight(1f).fillMaxWidth()) {
             items((0 until SettingsStore.EQ_BANDS).toList()) { i ->
                 val b = bands[i]
                 val sel = i == band

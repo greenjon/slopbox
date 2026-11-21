@@ -240,7 +240,7 @@ fun TrackRaterScreen(controller: MediaController?, nav: Nav) {
             fun yn(b: Boolean) = if (b) "Yes" else "No"
             Column(Modifier.fillMaxSize()) {
                 TitleBar("Track Rater", onBack = { menu = null; prefs.save(); rev++ })
-                LazyColumn(Modifier.fillMaxSize()) {
+                RockList(Modifier.fillMaxSize()) {
                     item { RockRow("Play Playlist", icon = G.ListQ) { menu = "playlists" } }
                     item { RockRow("Order", trailing = RaterPrefs.ORDERS[prefs.order]) { menu = "order" } }
                     item { RockRow("Skip Rated Tracks", trailing = yn(prefs.skipRated)) { prefs.skipRated = !prefs.skipRated; rev++ } }
@@ -263,7 +263,7 @@ fun TrackRaterScreen(controller: MediaController?, nav: Nav) {
                 when {
                     l == null -> ListNote(str(ctx, "LANG_WAIT"))
                     l.isEmpty() -> ListNote(str(ctx, "LANG_NO_FILES"))
-                    else -> LazyColumn(Modifier.fillMaxSize()) {
+                    else -> RockList(Modifier.fillMaxSize()) {
                         items(l) { d ->
                             RockRow(d.name.substringBeforeLast('.'), icon = G.ListQ) { menu = null; prefs.save(); playPlaylist(d) }
                         }
@@ -277,7 +277,7 @@ fun TrackRaterScreen(controller: MediaController?, nav: Nav) {
             val cur = if (m == "order") prefs.order else RaterPrefs.JUMPS.indexOf(prefs.jumpSec)
             Column(Modifier.fillMaxSize()) {
                 TitleBar(if (m == "order") "Order" else "Jump", onBack = { menu = "menu" })
-                LazyColumn(Modifier.fillMaxSize()) {
+                RockList(Modifier.fillMaxSize()) {
                     items(labels.indices.toList()) { i ->
                         RockRow(labels[i], selected = i == cur) {
                             if (m == "order") prefs.order = i else prefs.jumpSec = RaterPrefs.JUMPS[i]

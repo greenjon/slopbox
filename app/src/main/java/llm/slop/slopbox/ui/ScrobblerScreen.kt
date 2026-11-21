@@ -147,7 +147,7 @@ fun ScrobblerScreen(nav: Nav) {
             val (names, cur, set) = pending ?: return
             Column(Modifier.fillMaxSize()) {
                 TitleBar(page.removePrefix("opt:"), onBack = { page = "menu" })
-                LazyColumn(Modifier.fillMaxSize()) {
+                RockList(Modifier.fillMaxSize()) {
                     items(names.indices.toList()) { i -> RockRow(names[i], selected = i == cur) { set(i); page = "menu"; rev++ } }
                 }
             }
@@ -178,7 +178,7 @@ fun ScrobblerScreen(nav: Nav) {
             Column(Modifier.fillMaxSize()) {
                 TitleBar(str(ctx, "LANG_VIEWLOG"), onBack = { page = "menu" })
                 if (lines.isEmpty()) ListNote(str(ctx, "LANG_NO_FILES"))
-                LazyColumn(Modifier.fillMaxSize()) {
+                RockList(Modifier.fillMaxSize()) {
                     items(lines) { l ->
                         val e = Scrobbler.parseEntry(l)
                         RockRow(if (e == null) l else "${e.path.substringAfterLast('/')}  ${e.elapsed / 1000}/${e.length / 1000}s")
@@ -191,7 +191,7 @@ fun ScrobblerScreen(nav: Nav) {
     }
     Column(Modifier.fillMaxSize()) {
         TitleBar(str(ctx, "LANG_AUDIOSCROBBLER"), onBack = { if (cfg != saved) page = "confirmSave" else nav.pop() })
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             item { RockRow("Remove duplicates", trailing = listOf(str(ctx, "LANG_OFF"), str(ctx, "LANG_RESUME_PLAYBACK"), str(ctx, "LANG_ALL"))[cfg.removeDup]) {
                 options("Remove log duplicates", listOf(str(ctx, "LANG_OFF"), str(ctx, "LANG_RESUME_PLAYBACK"), str(ctx, "LANG_ALL")), cfg.removeDup) { cfg.removeDup = it } } }
             item { RockRow("Delete playback log", trailing = if (cfg.deleteLog) "Yes" else "No") { cfg.deleteLog = !cfg.deleteLog; rev++ } }

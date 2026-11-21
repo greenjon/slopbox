@@ -207,7 +207,7 @@ fun ShortcutsScreen(controller: MediaController?, nav: Nav, browser: BrowserStat
     Column(Modifier.fillMaxSize()) {
         TitleBar(str(ctx, "LANG_SHORTCUTS"), onBack = { nav.pop() })
         @Suppress("UNUSED_EXPRESSION") clock
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             itemsIndexed(list) { _, (index, sc) ->
                 RockRow(shortcutName(ctx, sc), icon = shortcutIcon(sc),
                     onLongClick = { confirmDelete = index }) { run(sc) }

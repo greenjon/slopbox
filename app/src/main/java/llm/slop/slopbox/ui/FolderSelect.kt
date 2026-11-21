@@ -129,7 +129,7 @@ fun FolderSelect(title: String, paths: String, onDone: (String?) -> Unit) {
         TitleBar(title, onBack = { leave() })
         val r = roots
         if (r == null) { ListNote(store.catalog.str("LANG_WAIT")); return@Column }
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             items(flat(r), key = { it.id }) { n ->
                 RockRow(
                     " ".repeat(n.depth) + n.name + if (n.state == Node.EACCESS) " ( " + store.catalog.str("LANG_READ_FAILED").replace("%s", "") + ")" else "",

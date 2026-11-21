@@ -193,7 +193,7 @@ fun DatabaseScreen(controller: MediaController?, nav: Nav, state: DatabaseState,
             }
             node is DatabaseState.Node.InMenu -> {
                 val entries = node.menu.entries.filter { it !is TagNavi.Entry.Sub || navi.menu(it.menuId) != null }
-                LazyColumn(Modifier.fillMaxSize()) {
+                RockList(Modifier.fillMaxSize()) {
                     itemsIndexed(entries) { i, e ->
                         RockRow(e.label, icon = G.TangoFolder, selected = state.cursor[node.menu.id] == i) {
                             state.cursor[node.menu.id] = i
@@ -257,7 +257,7 @@ private fun LevelList(
         when {
             l == null -> ListNote("Loading…")
             l.isEmpty() -> ListNote("No tracks.")
-            else -> LazyColumn(Modifier.fillMaxSize()) {
+            else -> RockList(Modifier.fillMaxSize()) {
                 itemsIndexed(l) { i, (label, t) ->
                     RockRow(
                         label, icon = if (t.id == playingTrack?.id) G.Cursor else G.TangoNote,
@@ -283,7 +283,8 @@ private fun LevelList(
     fun next(value: String?) = Level(
         level.entry, level.step + 1, level.picks + value, level.inputs, value ?: level.title,
     )
-    LazyColumn(Modifier.fillMaxSize()) {
+    // Two lines ([All tracks], [Random]) come before the values.
+    RockList(Modifier.fillMaxSize(), label = { i -> v.getOrNull((i - 2).coerceAtLeast(0))?.let(::initial) }) {
         // tagtree.c puts these first in every non-track list.
         item {
             RockRow("[All tracks]", icon = G.TangoNote, selected = state.cursor[key] == -1,

@@ -409,7 +409,7 @@ private fun LrcMenu(prefs: LrcPrefs, onOffset: (Long) -> Unit, offset: Long, onQ
                 TitleBar("Encoding", onBack = { page = "lyrics" })
                 val names = listOf("Use default codepage") +
                     (SettingsStore.get(ctx).catalog.byCfg["default codepage"]?.labels?.map { it.second } ?: emptyList())
-                LazyColumn(Modifier.fillMaxSize()) {
+                RockList(Modifier.fillMaxSize()) {
                     itemsIndexed(names) { i, n -> RockRow(n, selected = prefs.encoding + 1 == i) { prefs.encoding = i - 1; page = "lyrics" } }
                 }
             }

@@ -87,7 +87,7 @@ fun BookmarkListScreen(controller: MediaController?, nav: Nav) {
     Column(Modifier.fillMaxSize()) {
         TitleBar(title, onBack = { nav.pop() })
         if (list.isEmpty()) ListNote(str(ctx, "LANG_BOOKMARK_LOAD_EMPTY"))
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             itemsIndexed(list) { _, bm ->
                 RockRow(
                     bookmarkLine1(bm, showPlaylist = playlist == null),
@@ -137,7 +137,7 @@ fun AskOverlay(req: AskRequest) {
                 // Rockbox select_bookmark() with "[Don't Resume]" first.
                 TitleBar(str(ctx, "LANG_BOOKMARK_SELECT_BOOKMARK"), onBack = { req.answer(-1) })
                 RockRow(str(ctx, "LANG_BOOKMARK_DONT_RESUME"), selected = true) { req.answer(-1) }
-                LazyColumn(Modifier.fillMaxSize()) {
+                RockList(Modifier.fillMaxSize()) {
                     itemsIndexed(req.lines.mapNotNull { Bookmarks.parse(it) }) { i, bm ->
                         RockRow(bookmarkLine1(bm, false), sub = bookmarkLine2(ctx, bm), icon = G.Cursor) { req.answer(i) }
                     }

@@ -90,7 +90,7 @@ fun OpenPluginPicker(key: String, titleBar: Boolean = true, onDone: () -> Unit) 
     BackHandler { onDone() }
     Column(Modifier.fillMaxSize()) {
         if (titleBar) TitleBar(str(ctx, "LANG_OPEN_PLUGIN"), onBack = onDone)
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             items(PluginList.all) { p ->
                 RockRow(p.name, icon = G.Cursor, selected = p == cur) { OpenPlugin.set(ctx, key, p.name); onDone() }
             }
@@ -111,7 +111,7 @@ fun PluginsScreen(nav: Nav) {
         val cat = category
         if (cat == null) {
             TitleBar(str(ctx, "LANG_PLUGINS"), onBack = { nav.pop() })
-            LazyColumn(Modifier.fillMaxSize()) {
+            RockList(Modifier.fillMaxSize()) {
                 itemsIndexed(PluginList.categories) { i, (name, _) ->
                     RockRow(name, icon = G.TangoFolder) { category = i }
                 }
@@ -119,7 +119,7 @@ fun PluginsScreen(nav: Nav) {
         } else {
             val (name, plugins) = PluginList.categories[cat]
             TitleBar(name, onBack = { category = null })
-            LazyColumn(Modifier.fillMaxSize()) {
+            RockList(Modifier.fillMaxSize()) {
                 items(plugins) { p ->
                     RockRow(p.name, icon = G.Cursor) { PluginList.running = p.name; nav.push(p.screen) }
                 }
@@ -274,7 +274,7 @@ private fun RfaEdit(onDone: () -> Unit) {
     val count = removed.count { !it }
     Column(Modifier.fillMaxSize()) {
         TitleBar(if (count == 1) "1 Folder" else "$count Folders", onBack = { if (dirty) askSave = true else onDone() })
-        LazyColumn(Modifier.fillMaxSize()) {
+        RockList(Modifier.fillMaxSize()) {
             itemsIndexed(dirs) { i, d ->
                 // A removed folder shows as a blank line, as in the plugin.
                 RockRow(if (removed[i]) " " else d, onLongClick = { menuFor = i }) { disable(i) }

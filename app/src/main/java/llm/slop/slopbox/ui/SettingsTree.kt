@@ -286,7 +286,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
         // The folder picker has its own title bar (its back asks to save).
         if (page !is Page.FolderSel && page !is Page.MainMenuCfg) TitleBar(if (page is Page.ContextItem) cat.str("LANG_ONPLAY_MENU_TITLE") else page.title, onBack = ::back)
         when (page) {
-            is Page.Menu -> LazyColumn(Modifier.fillMaxSize()) {
+            is Page.Menu -> RockList(Modifier.fillMaxSize()) {
                 items(page.item.items) { item ->
                     val setting = cat.settings.getOrNull(item.setting)
                     val ctxItem = contextItem(item)
@@ -318,7 +318,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                 val start = page.labels.indexOfFirst { it.first == current }.coerceAtLeast(0)
                 val state = rememberLazyListState((start - 3).coerceAtLeast(0))
                 page.note?.let { ListNote(it) }
-                LazyColumn(Modifier.fillMaxSize(), state = state) {
+                RockList(Modifier.fillMaxSize(), state = state) {
                     items(page.labels) { (value, label) ->
                         RockRow(label.trim(), selected = value == current) {
                             page.onPick(value)
@@ -334,7 +334,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                 var pickPlugin by remember { mutableStateOf(false) }
                 // hotkey_menu_do_setting(): Open Plugin asks which plugin (open_plugin_browse).
                 if (pickPlugin) OpenPluginPicker(if (page.item == 0) OpenPlugin.WPS else OpenPlugin.CONTEXT, titleBar = false) { back() }
-                else LazyColumn(Modifier.fillMaxSize()) {
+                else RockList(Modifier.fillMaxSize()) {
                     items(Hotkey.entries.filter { it.wps }) { hk ->
                         RockRow(cat.str(hk.lang), selected = hk == cur) {
                             WpsContext.set(store, page.item, hk)
@@ -348,7 +348,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
             is Page.Themes -> {
                 val themes = remember { BundledThemes.list(ctx) }
                 val current = remember(revision) { themes.map { it.matches(store) } }
-                LazyColumn(Modifier.fillMaxSize()) {
+                RockList(Modifier.fillMaxSize()) {
                     itemsIndexed(themes) { i, t ->
                         RockRow(t.name, icon = G.Config, selected = current[i]) {
                             store.loadCfg(t.text)
@@ -368,7 +368,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                     stack.removeAt(stack.lastIndex)
                 }
             }
-            is Page.SimpleEq -> LazyColumn(Modifier.fillMaxSize()) {
+            is Page.SimpleEq -> RockList(Modifier.fillMaxSize()) {
                 @Suppress("UNUSED_EXPRESSION") revision
                 items((0 until SettingsStore.EQ_BANDS).toList()) { band ->
                     val b = store.eqBand(band)
@@ -381,7 +381,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
             }
             is Page.AdvancedEq -> {
                 var expanded by remember { mutableIntStateOf(-1) }
-                LazyColumn(Modifier.fillMaxSize()) {
+                RockList(Modifier.fillMaxSize()) {
                     @Suppress("UNUSED_EXPRESSION") revision
                     for (band in 0 until SettingsStore.EQ_BANDS) {
                         item(key = "b$band") {

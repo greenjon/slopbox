@@ -356,6 +356,13 @@ Anything new goes here in the same change that introduces it.
   album art, LRC Player, Track Rater). The default is Bottom (Rockbox's is
   Top), so a `.cfg` without a Status Bar line gives Bottom. The Files and
   Database title bars' ▶ button appears only with the Status Bar off.
+- **Scroll bar.** Scroll Bar (Off, Left, Right) and Scroll Bar Width work
+  on every list, with the width in dp (at least 4) rather than pixels. On
+  a touchscreen the thumb can be dragged; a touch must start on the thumb,
+  so taps elsewhere along the edge still reach the list. While dragging, a
+  bubble shows the first letter of the top line in Files, the Database's
+  value lists and the Playlist Catalogue (digits as #), and the line
+  number elsewhere. Rockbox's scroll bar only shows position.
 - **Main menu.** It has Rockbox's order and Settings > Main Menu
   customisation (a port of the main_menu_config plugin), but only the items
   SlopBox has: no Recording or FM Radio. SlopBox doesn't use the Rockbox name

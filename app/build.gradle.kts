@@ -37,8 +37,8 @@ android {
         // 28: AAudio with usage/content type (Android 9).
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.0.1"
+        versionCode = 2
+        versionName = "1.0.0"
         // ./gradlew assembleDebug -PappIdSuffix=.ui installs next to the main
         // build, so two lines of work (or a release check) can share one phone.
         (project.findProperty("appIdSuffix") as String?)?.let { applicationIdSuffix = it }

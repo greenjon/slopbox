@@ -457,7 +457,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "line selector text color", "list separator color", "list separator height", "selector type",
             "scrollbar", "scrollbar width",
             SlopBoxSettings.SWIPE_TRACKS, SlopBoxSettings.SWIPE_PLAYLIST, SlopBoxSettings.DOUBLE_TAP,
-            SlopBoxSettings.LONG_PRESS, SlopBoxSettings.EDGE_VOLUME,
+            SlopBoxSettings.LONG_PRESS, SlopBoxSettings.EDGE_VOLUME, SlopBoxSettings.HAPTICS,
         )
 
         @Volatile private var instance: SettingsStore? = null
@@ -484,6 +484,7 @@ object SlopBoxSettings {
     const val DOUBLE_TAP = "slopbox double tap play"
     const val LONG_PRESS = "slopbox long press menu"
     const val EDGE_VOLUME = "slopbox edge volume"
+    const val HAPTICS = "slopbox haptics"
 
     val ALL = listOf(
         Bool(SWIPE_TRACKS, "Swipe Art to Change Track", true),
@@ -491,14 +492,19 @@ object SlopBoxSettings {
         Bool(DOUBLE_TAP, "Double-Tap to Play/Pause", true),
         Bool(LONG_PRESS, "Long-Press for Context Menu", true),
         Bool(EDGE_VOLUME, "Right Edge Volume", true),
+        Bool(HAPTICS, "Haptic Feedback", true),
     )
+    /** How many of [ALL] are Now Playing gestures (the rest sit directly in the SlopBox menu). */
+    private const val GESTURES = 5
 
     /** Theme Settings gets a SlopBox menu holding a Now Playing Gestures menu. */
     fun addMenu(root: RbMenuItem, lang: Map<String, String>, first: Int): RbMenuItem {
         val theme = lang["LANG_THEME_MENU"] ?: "Theme Settings"
+        fun item(i: Int) = RbMenuItem(RbMenuItem.MT_SETTING, ALL[i].title, first + i, null, null, emptyList())
         val gestures = RbMenuItem(RbMenuItem.MT_MENU, "Now Playing Gestures", -1, null, null,
-            ALL.indices.map { i -> RbMenuItem(RbMenuItem.MT_SETTING, ALL[i].title, first + i, null, null, emptyList()) })
-        val slopbox = RbMenuItem(RbMenuItem.MT_MENU, "SlopBox", -1, null, null, listOf(gestures))
+            (0 until GESTURES).map(::item))
+        val slopbox = RbMenuItem(RbMenuItem.MT_MENU, "SlopBox", -1, null, null,
+            listOf(gestures) + (GESTURES until ALL.size).map(::item))
         return RbMenuItem(root.type, root.text, root.setting, root.function, root.param,
             root.items.map { m ->
                 if (m.isMenu && m.text == theme) RbMenuItem(m.type, m.text, m.setting, m.function, m.param, m.items + slopbox, m.textFn)

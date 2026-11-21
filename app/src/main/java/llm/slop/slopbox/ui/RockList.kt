@@ -130,6 +130,10 @@ fun RockList(
             if (dragging) {
                 val first = state.firstVisibleItemIndex
                 val text = labelFor?.invoke(first) ?: "${first + 1}"
+                // A tick each time the letter changes (not for plain line numbers).
+                val haptics = rememberHaptics()
+                val lettered = labelFor?.invoke(first) != null
+                androidx.compose.runtime.LaunchedEffect(text) { if (lettered) haptics.tick() }
                 Bubble(text, state, left, grabW)
             }
         }

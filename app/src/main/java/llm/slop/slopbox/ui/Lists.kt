@@ -46,7 +46,13 @@ import androidx.compose.ui.unit.dp
 
 /** The bar above a list: back button, title, optional actions on the right. */
 @Composable
-fun TitleBar(title: String, onBack: (() -> Unit)?, actions: @Composable RowScope.() -> Unit = {}) {
+fun TitleBar(
+    title: String,
+    onBack: (() -> Unit)?,
+    /** Drawn instead of [title] when given (e.g. the Files breadcrumbs); fills the middle. */
+    titleContent: (@Composable RowScope.() -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
     Column {
         Row(
             Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp),
@@ -59,7 +65,7 @@ fun TitleBar(title: String, onBack: (() -> Unit)?, actions: @Composable RowScope
             } else {
                 Spacer(Modifier.width(12.dp))
             }
-            BasicText(
+            if (titleContent != null) titleContent() else BasicText(
                 title,
                 Modifier.weight(1f),
                 style = Cabbie.body.copy(color = Cabbie.Text),
@@ -106,6 +112,7 @@ fun RockRow(
     val showIcons = forceIcon || llm.slop.slopbox.SettingsStore.get(ctx).int("show icons") != 0
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
+    val haptics = rememberHaptics()
     val hit = (selected || pressed) && enabled
     // Rockbox Line Selector Type: a bar (inverse, solid or gradient), or Pointer (a cursor, no bar).
     val selBrush = Cabbie.selector
@@ -126,7 +133,7 @@ fun RockRow(
                     interactionSource = source,
                     indication = null,
                     enabled = enabled,
-                    onLongClick = onLongClick,
+                    onLongClick = onLongClick?.let { l -> { haptics.press(); l() } },
                     onClick = onClick,
                 )
                 .padding(horizontal = 12.dp, vertical = 6.dp),

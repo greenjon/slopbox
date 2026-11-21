@@ -158,6 +158,7 @@ private const val VOLUME_MS = 2000L  // cabbiev2: %?mv(2.0) / %?Tl(small_vol,2.0
 @Composable
 fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
     val ctx = LocalContext.current
+    val haptics = rememberHaptics()
     var s by remember { mutableStateOf(Snap()) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var lastTouch by remember { mutableLongStateOf(0L) }
@@ -218,7 +219,7 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
         // or empty space does: not the controls or bar, and not a swipe, double-tap or
         // long-press (the gestures work over this whole area; a tap on the art opens the playlist).
         BoxWithConstraints(
-            Modifier.weight(1f).fillMaxWidth().artGestures(controller, nav, ctx) {
+            Modifier.weight(1f).fillMaxWidth().artGestures(controller, nav, ctx, haptics) {
                 lastTouch = System.currentTimeMillis()
                 now = lastTouch
             },
@@ -228,7 +229,7 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
                 Spacer(Modifier.height(14.dp))
                 // cabbiev2: a tap opens the playlist. SlopBox adds gestures (Theme Settings ›
                 // SlopBox › Now Playing Gestures), each of which can be turned off.
-                val toPlaylist = Modifier.artGestures(controller, nav, ctx)
+                val toPlaylist = Modifier.artGestures(controller, nav, ctx, haptics)
                 if (art != null) {
                     Image(
                         art, contentDescription = "Album art",
@@ -333,6 +334,7 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
                     g, Modifier.weight(1f),
                     onTap = { if (dir < 0) controller?.seekToPrevious() else controller?.seekToNext() },
                     onHold = { _ ->
+                        haptics.tick()
                         seeking = g
                         // Rockbox gui/wps.c ffwd_rew(): start at "FF/RW Min Step", grow by
                         // step >> (accel + 3) each repeat, capped at 3% of what's left.
@@ -606,7 +608,7 @@ private fun fmt(ms: Long): String {
  * pause, long-press for the Context Menu.
  */
 private fun Modifier.artGestures(
-    controller: MediaController?, nav: Nav, ctx: Context,
+    controller: MediaController?, nav: Nav, ctx: Context, haptics: Haptics,
     onTap: () -> Unit = { nav.push(Screen.Playlist) },
 ): Modifier {
     val store = llm.slop.slopbox.SettingsStore.get(ctx)
@@ -616,9 +618,11 @@ private fun Modifier.artGestures(
             detectTapGestures(
                 onTap = { onTap() },
                 onDoubleTap = if (on(llm.slop.slopbox.SlopBoxSettings.DOUBLE_TAP)) ({
+                    haptics.press()
                     controller?.let { if (it.isPlaying || it.playWhenReady) it.pause() else it.play() }
                 }) else null,
                 onLongPress = if (on(llm.slop.slopbox.SlopBoxSettings.LONG_PRESS)) ({
+                    haptics.press()
                     nav.push(Screen.ContextMenu)
                 }) else null,
             )
@@ -634,9 +638,9 @@ private fun Modifier.artGestures(
                         kotlin.math.abs(dx) > kotlin.math.abs(dy) && kotlin.math.abs(dx) > min &&
                             on(llm.slop.slopbox.SlopBoxSettings.SWIPE_TRACKS) ->
                             // Swipe left (content moves left) = next, as in most players.
-                            if (dx < 0) controller?.seekToNext() else controller?.seekToPrevious()
+                            { haptics.press(); if (dx < 0) controller?.seekToNext() else controller?.seekToPrevious() }
                         dy < -min && kotlin.math.abs(dy) > kotlin.math.abs(dx) &&
-                            on(llm.slop.slopbox.SlopBoxSettings.SWIPE_PLAYLIST) -> nav.push(Screen.Playlist)
+                            on(llm.slop.slopbox.SlopBoxSettings.SWIPE_PLAYLIST) -> { haptics.press(); nav.push(Screen.Playlist) }
                     }
                 },
             ) { ch, d -> ch.consume(); dx += d.x; dy += d.y }
@@ -646,6 +650,7 @@ private fun Modifier.artGestures(
 /** A strip where dragging up or down changes the media volume, the full range over the strip's height. */
 @Composable
 private fun EdgeVolume(ctx: Context, modifier: Modifier, onChange: () -> Unit) {
+    val haptics = rememberHaptics()
     val am = remember { ctx.getSystemService(AudioManager::class.java) }
     val changed by rememberUpdatedState(onChange)
     Box(modifier.pointerInput(Unit) {
@@ -658,7 +663,10 @@ private fun EdgeVolume(ctx: Context, modifier: Modifier, onChange: () -> Unit) {
             ch.consume()
             moved += dy
             val v = (start - moved / size.height * max).toInt().coerceIn(0, max)
-            if (v != am.getStreamVolume(AudioManager.STREAM_MUSIC)) am.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0)
+            if (v != am.getStreamVolume(AudioManager.STREAM_MUSIC)) {
+                am.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0)
+                haptics.tick()
+            }
             changed()
         }
     })

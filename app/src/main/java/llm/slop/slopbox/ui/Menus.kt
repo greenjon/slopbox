@@ -157,6 +157,7 @@ fun QuickScreen(@Suppress("UNUSED_PARAMETER") controller: MediaController?, nav:
 
     // Rockbox option_select_next_val(): step through the values, wrapping
     // unless the setting says F_NO_WRAP.
+    val haptics = rememberHaptics()
     fun step(st: llm.slop.slopbox.RbSetting?, previous: Boolean) {
         st ?: return
         val labels = st.labels
@@ -164,6 +165,7 @@ fun QuickScreen(@Suppress("UNUSED_PARAMETER") controller: MediaController?, nav:
         val noWrap = st.flags and 0x1000L != 0L
         val j = if (previous) (if (i == 0) (if (noWrap) 0 else labels.lastIndex) else i - 1)
             else (if (i == labels.lastIndex) (if (noWrap) i else 0) else i + 1)
+        if (labels[j].first != store.int(st)) haptics.tick()
         store.set(st, labels[j].first)
     }
 

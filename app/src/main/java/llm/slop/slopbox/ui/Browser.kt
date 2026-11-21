@@ -28,6 +28,15 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -257,6 +266,11 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
         TitleBar(
             FileView.title(state.path, fv),
             onBack = { if (state.path.size > 1) state.path.removeAt(state.path.lastIndex) else nav.pop() },
+            titleContent = if (fv.int("show path in browser") == 0) null else ({
+                Breadcrumbs(state.path, full = fv.int("show path in browser") == 2) { k ->
+                    while (state.path.size > k + 1) state.path.removeAt(state.path.lastIndex)
+                }
+            }),
         ) {
             BarButton(G.ListC) { menu = BrowserMenu.ForFolder }
             NowPlayingButton(nav)
@@ -431,6 +445,60 @@ private fun FileViewer(tree: Uri, doc: Doc, nav: Nav, onBack: () -> Unit) {
                             llm.slop.slopbox.SlopPlayer.current?.playBookmark(l)
                             onBack(); nav.toNowPlaying()
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The Files title (Show Path). Full Path: every folder from the music folder
+ * down, each tappable to go back up to it, scrolled so the current one shows.
+ * Current Directory Only: the folder's name; tapping it lists the folders
+ * above to jump to.
+ */
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.Breadcrumbs(path: List<Doc>, full: Boolean, goTo: (Int) -> Unit) {
+    if (full) {
+        val scroll = androidx.compose.foundation.rememberScrollState()
+        LaunchedEffect(path.size) { scroll.scrollTo(scroll.maxValue) }
+        androidx.compose.foundation.layout.Row(
+            Modifier.weight(1f).horizontalScroll(scroll),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            path.forEachIndexed { k, d ->
+                if (k > 0) BasicText(" / ", style = Cabbie.body.copy(color = Cabbie.Dim))
+                val last = k == path.lastIndex
+                BasicText(
+                    d.name,
+                    Modifier.then(if (last) Modifier else Modifier.clickable { goTo(k) }).padding(vertical = 12.dp),
+                    style = Cabbie.body.copy(color = if (last) Cabbie.Text else Cabbie.Dim),
+                    maxLines = 1,
+                )
+            }
+        }
+    } else {
+        var open by remember { mutableStateOf(false) }
+        val name = path.lastOrNull()?.name.orEmpty()
+        Box(Modifier.weight(1f)) {
+            BasicText(
+                if (path.size > 1) "$name ▾" else name,
+                Modifier.then(if (path.size > 1) Modifier.clickable { open = true } else Modifier).padding(vertical = 12.dp),
+                style = Cabbie.body, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+            if (open) androidx.compose.ui.window.Popup(
+                onDismissRequest = { open = false },
+                properties = androidx.compose.ui.window.PopupProperties(focusable = true),
+                offset = androidx.compose.ui.unit.IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) { 48.dp.roundToPx() }),
+            ) {
+                androidx.compose.foundation.layout.Column(
+                    Modifier.width(280.dp).background(Cabbie.backdrop)
+                        .border(1.dp, Cabbie.Separator, androidx.compose.foundation.shape.RoundedCornerShape(4.dp)),
+                ) {
+                    // Nearest folder first.
+                    for (k in path.lastIndex - 1 downTo 0) {
+                        RockRow(path[k].name, icon = G.TangoFolder) { open = false; goTo(k) }
                     }
                 }
             }

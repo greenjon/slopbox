@@ -357,6 +357,15 @@ Anything new goes here in the same change that introduces it.
 - **SlopBox settings.** Settings Rockbox doesn't have sit in Theme Settings
   › SlopBox and are saved in `config.cfg` under `slopbox ...` names, which
   Rockbox ignores.
+- **Haptic feedback.** In place of a player's button clicks, SlopBox
+  vibrates briefly on long-presses, gestures, each step of a held seek or
+  −/+ button, Quick Screen changes, edge volume steps and each new letter
+  while dragging the scroll bar (Theme Settings › SlopBox › Haptic
+  Feedback, on by default; Android's own touch vibration setting applies
+  too).
+- **File browser title.** With Show Path set to Full Path, each folder in
+  the path can be tapped to go back up to it. With Current Directory Only,
+  tapping the folder's name lists the folders above it to jump to.
 - **Status Bar.** Rockbox's status bar shows battery, volume and play
   state icons. SlopBox has Android's for that, and uses the Status Bar
   setting to place a mini-player instead: a strip with a progress line,

@@ -13,10 +13,13 @@
 
 ## 1.1
 
+- ~~Touch-first interface and themes (docs/ui-plan.md steps 1-15)~~ (1.1.0).
+
+## 1.2
+
 - Voice menus (Rockbox's talk support).
 - Languages other than English (Rockbox's `.lang` files).
 - Faster database scans (5,648 tracks scan acceptably for 1.0).
 - More music plugins: metronome, VU meter / oscilloscope / FFT, pitch
   detector, cue_playlist, vbrfix.
 - Home-screen widget and Quick Settings tile (docs/ui-plan.md step 16).
-- The rest of the touch and theme work in docs/ui-plan.md.

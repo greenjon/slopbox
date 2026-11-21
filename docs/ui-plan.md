@@ -1,6 +1,6 @@
 # SlopBox UI: touch-first and themeable
 
-Status: planned 2026-11-21. All steps except 16 (widget and tile, 1.1) done 2026-11-21. Differences from the text below: text size is a SlopBox setting, not Rockbox's Font; step 4 gives Full Path tappable segments and Current Directory Only a dropdown.
+Status: planned 2026-11-21. All steps except 16 (widget and tile, now planned for 1.2) done 2026-11-21 and released in 1.1.0. Differences from the text below: text size is a SlopBox setting, not Rockbox's Font; step 4 gives Full Path tappable segments and Current Directory Only a dropdown.
 
 ## Goal
 
@@ -153,4 +153,4 @@ library or playlist.
 
 - Swipe gestures are on by default.
 - Album art accent recolours Now Playing only.
-- The widget and Quick Settings tile ship in 1.1.
+- The widget and Quick Settings tile ship later (1.2 on the roadmap).

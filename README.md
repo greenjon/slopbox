@@ -23,7 +23,7 @@ Much of it is written with AI help, hence the name.
 
 ## Status
 
-Version 1.0.0. Download the APK from
+Version 1.1.0. Download the APK from
 [Releases](https://github.com/greenjon/slopbox/releases) (Android 9 or later,
 arm64 or x86_64).
 
@@ -33,13 +33,16 @@ database (Rockbox's `tagnavi.config` menus, with runtime data and ratings),
 playlists, bookmarks, cuesheets, A-B repeat, the sleep timer, the Quick
 Screen, Shortcuts, a customisable main menu and the System menu; and the
 music plugins Random Folder Advance, LRC Player, Last.fm Logger and Alarm
-Clock, plus SlopBox's own Track Rater. Playback runs in a Media3 session service, so it keeps playing with
+Clock, plus SlopBox's own Track Rater. The interface is built for touch: a
+mini-player on every list, gestures on the playing screen, a draggable scroll
+bar, four playing-screen layouts, and Rockbox's theme colours with a colour
+picker and bundled themes. Playback runs in a Media3 session service, so it keeps playing with
 the screen off, shows a media notification, answers
 headset/Bluetooth/lock-screen buttons, handles audio focus and pauses when
 headphones are unplugged.
 
 Tested on a Unihertz Jelly Star (Android 13, arm64) with a library of about
-5,600 tracks on an SD card. Plans for 1.1 (voice, languages, more music
+5,600 tracks on an SD card. Plans for 1.2 (voice, languages, more music
 plugins, faster scans) are in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Known differences from Rockbox are listed in [docs/DIFFERENCES.md](docs/DIFFERENCES.md).

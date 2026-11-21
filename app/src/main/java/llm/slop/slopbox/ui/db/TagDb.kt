@@ -84,6 +84,10 @@ class Stats(
  */
 object TagDb {
     private const val FILE = "tagdb.bin"
+    /** A scan's progress so far (Rockbox keeps its temp database until it commits). */
+    private const val PARTIAL = "tagdb.partial.bin"
+    private const val PARTIAL_FULL = "tagdb.partial.full"
+    private const val CHECKPOINT = 250
     private const val VERSION = 2
 
     var tracks by mutableStateOf<List<Track>>(emptyList())
@@ -120,10 +124,20 @@ object TagDb {
 
     fun load(ctx: Context) {
         if (loaded) return
+        val app = ctx.applicationContext
         scope.launch {
-            val f = File(ctx.filesDir, FILE)
+            val f = File(app.filesDir, FILE)
             if (f.exists()) runCatching { read(f) }.onFailure { Log.w(TAG, "read db failed", it) }
             loaded = true
+            val tree = MusicTree.root(app) ?: return@launch
+            val partial = File(app.filesDir, PARTIAL)
+            when {
+                // A scan was cut short (the app was closed): carry on from where it got to.
+                partial.exists() -> scan(app, tree, full = File(app.filesDir, PARTIAL_FULL).exists())
+                // Rockbox "Auto Update": update the database at start-up.
+                llm.slop.slopbox.SettingsStore.get(app).int("tagcache_autoupdate") != 0 && tracks.isNotEmpty() ->
+                    scan(app, tree, full = false)
+            }
         }
     }
 
@@ -155,6 +169,13 @@ object TagDb {
                 val commit = if (full) 1 else commits + 1
                 val out = ArrayList<Track>(old.size)
                 var seen = 0
+                // Tags already read by a scan that was cut short.
+                val partialFile = File(app.filesDir, PARTIAL)
+                val fullMarker = File(app.filesDir, PARTIAL_FULL)
+                val cached = if (partialFile.exists()) runCatching { parse(partialFile)?.tracks }.getOrNull()
+                    .orEmpty().associateBy { it.id } else emptyMap()
+                if (full) fullMarker.writeText("") else fullMarker.delete()
+                var freshReads = 0
                 suspend fun walk(dirId: String, dirName: String, path: String) {
                     for (e in children(app, tree, dirId)) {
                         if (!isActive) return
@@ -165,8 +186,20 @@ object TagDb {
                         seen++
                         if (seen % 10 == 0) progress = building(seen)
                         val prev = old[e.id]
-                        out += if (prev != null && prev.modified == e.modified && prev.size == e.size) prev
-                        else readTags(app, tree, e, dirId, dirName, "$path/${e.name}", prev?.commitId ?: commit)
+                        val done = cached[e.id]
+                        out += when {
+                            prev != null && prev.modified == e.modified && prev.size == e.size -> prev
+                            done != null && done.modified == e.modified && done.size == e.size -> done
+                            else -> {
+                                freshReads++
+                                readTags(app, tree, e, dirId, dirName, "$path/${e.name}", prev?.commitId ?: commit)
+                            }
+                        }
+                        // Save progress now and then, so closing the app doesn't lose it.
+                        if (freshReads > 0 && freshReads % CHECKPOINT == 0) {
+                            val ids = out.mapTo(HashSet()) { it.id }
+                            runCatching { write(partialFile, out + cached.values.filter { it.id !in ids }, commit) }
+                        }
                     }
                 }
                 val rootId = MusicTree.rootId(tree)
@@ -180,6 +213,8 @@ object TagDb {
                 tracks = out
                 commits = commit
                 write(File(app.filesDir, FILE))
+                partialFile.delete()
+                fullMarker.delete()
                 statsRevision++
             } catch (e: Exception) {
                 Log.w(TAG, "scan failed", e)
@@ -422,14 +457,14 @@ object TagDb {
     }
 
     @Synchronized
-    private fun write(f: File) {
+    private fun write(f: File, list: List<Track> = tracks, commitsValue: Int = commits) {
         val tmp = File(f.path + ".tmp")
         DataOutputStream(tmp.outputStream().buffered()).use { o ->
             o.writeInt(VERSION)
-            o.writeInt(commits)
+            o.writeInt(commitsValue)
             o.writeLong(serial)
-            o.writeInt(tracks.size)
-            for (t in tracks) {
+            o.writeInt(list.size)
+            for (t in list) {
                 for (s in listOf(t.id, t.dir, t.dirName, t.path, t.title, t.artist, t.album, t.albumArtist, t.genre, t.composer)) {
                     o.writeUTF(s.take(16000))
                 }
@@ -444,10 +479,19 @@ object TagDb {
         tmp.renameTo(f)
     }
 
+    private class Parsed(val commits: Int, val serial: Long, val tracks: List<Track>, val stats: Map<String, Stats>)
+
     private fun read(f: File) {
+        val p = parse(f) ?: return
+        synchronized(stats) { stats.clear(); stats.putAll(p.stats); serial = p.serial }
+        commits = p.commits
+        tracks = p.tracks
+    }
+
+    private fun parse(f: File): Parsed? {
         DataInputStream(f.inputStream().buffered()).use { i ->
             val version = i.readInt()
-            if (version != 1 && version != VERSION) return
+            if (version != 1 && version != VERSION) return null
             val c = i.readInt()
             val ser = if (version >= 2) i.readLong() else 0L
             val n = i.readInt()
@@ -466,15 +510,15 @@ object TagDb {
                     if (x.playcount != 0 || x.rating != 0 || x.playtime != 0L || x.dirty) st[t.id] = x
                 }
             }
-            synchronized(stats) { stats.clear(); stats.putAll(st); serial = ser }
-            commits = c
-            tracks = list
+            return Parsed(c, ser, list, st)
         }
     }
 
     suspend fun clear(ctx: Context) = withContext(Dispatchers.IO) {
         scanJob?.cancel()
         File(ctx.filesDir, FILE).delete()
+        File(ctx.filesDir, PARTIAL).delete()
+        File(ctx.filesDir, PARTIAL_FULL).delete()
         tracks = emptyList()
         commits = 0
         synchronized(stats) { stats.clear(); serial = 0 }

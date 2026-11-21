@@ -245,6 +245,11 @@ Anything new goes here in the same change that introduces it.
   `tagcache`. Tags are read with Rockbox's metadata parser.
 - **Track numbers.** Rockbox reports "no track number" as -1; the database
   stores 0.
+- **Scans.** As in Rockbox, the old database stays in use until a scan
+  finishes. A scan saves its progress every 250 newly read files; if
+  SlopBox is closed mid-scan, the scan carries on at the next start without
+  reading those files again. "Auto Update" updates the database each time
+  SlopBox starts (Rockbox: at boot).
 - **Runtime data.** Play count, rating, play time and last played follow
   Rockbox's rules (Gather Runtime Data, the 15 s rule, autoscore, the
   last-played serial, kept on Update Now and lost on Initialize Now). A file

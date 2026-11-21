@@ -345,8 +345,18 @@ Anything new goes here in the same change that introduces it.
   before such a colour is saved.
 - **Playing screen popup.** cabbiev2 shows its Browse / Quick Screen /
   Context Menu popup on any touch, over the track lines. SlopBox shows it
-  only for touches on the album art and track lines, so using the progress
-  bar or the buttons doesn't hide what's playing.
+  only for a tap on the track lines or the space around the art, so using
+  the progress bar, the buttons or a gesture doesn't hide what's playing.
+- **Playing screen gestures.** SlopBox adds gestures over the art and
+  track lines, each switchable in Theme Settings › SlopBox › Now Playing
+  Gestures (all on by default): swipe left / right for the next / previous
+  track, swipe up for the playlist, double-tap to play or pause,
+  long-press for the Context Menu, and a vertical drag along the right
+  edge for the volume. With Double-Tap on, a single tap waits a moment to
+  be sure it isn't a double one.
+- **SlopBox settings.** Settings Rockbox doesn't have sit in Theme Settings
+  › SlopBox and are saved in `config.cfg` under `slopbox ...` names, which
+  Rockbox ignores.
 - **Status Bar.** Rockbox's status bar shows battery, volume and play
   state icons. SlopBox has Android's for that, and uses the Status Bar
   setting to place a mini-player instead: a strip with a progress line,

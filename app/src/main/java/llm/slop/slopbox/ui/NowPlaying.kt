@@ -27,7 +27,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +46,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -211,24 +214,21 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
             return@Column
         }
 
-        // cabbiev2 shows the popup on any touch (%Tl). Here only touches on the art and
-        // track lines do, so the controls and progress bar don't hide what's playing.
+        // cabbiev2 shows the popup on any touch (%Tl). Here only a tap on the track lines
+        // or empty space does: not the controls or bar, and not a swipe, double-tap or
+        // long-press (the gestures work over this whole area; a tap on the art opens the playlist).
         BoxWithConstraints(
-            Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) {
-                // Watch the touch without taking it.
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                    lastTouch = System.currentTimeMillis()
-                    now = lastTouch
-                }
+            Modifier.weight(1f).fillMaxWidth().artGestures(controller, nav, ctx) {
+                lastTouch = System.currentTimeMillis()
+                now = lastTouch
             },
         ) {
             val artSize: Dp = min(maxWidth * 0.68f, maxHeight * 0.48f)
             Column(Modifier.fillMaxSize()) {
                 Spacer(Modifier.height(14.dp))
-                val toPlaylist = Modifier.clickable(
-                    interactionSource = remember { MutableInteractionSource() }, indication = null,
-                ) { nav.push(Screen.Playlist) }
+                // cabbiev2: a tap opens the playlist. SlopBox adds gestures (Theme Settings ›
+                // SlopBox › Now Playing Gestures), each of which can be turned off.
+                val toPlaylist = Modifier.artGestures(controller, nav, ctx)
                 if (art != null) {
                     Image(
                         art, contentDescription = "Album art",
@@ -272,6 +272,13 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
                             }
                         }
                     }
+                }
+            }
+            // SlopBox: a vertical drag along the right edge sets the volume (shows the volume bar).
+            if (!showPopup && llm.slop.slopbox.SettingsStore.get(ctx).int(llm.slop.slopbox.SlopBoxSettings.EDGE_VOLUME) != 0) {
+                EdgeVolume(ctx, Modifier.align(Alignment.CenterEnd).width(36.dp).fillMaxHeight()) {
+                    volumeAt = System.currentTimeMillis()
+                    now = volumeAt
                 }
             }
         }
@@ -589,4 +596,70 @@ private fun fmt(ms: Long): String {
     val t = ms / 1000
     return if (t >= 3600) "%d:%02d:%02d".format(t / 3600, (t / 60) % 60, t % 60)
     else "%d:%02d".format(t / 60, t % 60)
+}
+
+/**
+ * The art's gestures, also on the area around it. Tap: [onTap] (on the art, the
+ * playlist, as in cabbiev2; around it, the popup). SlopBox, each switchable in
+ * Theme Settings › SlopBox › Now Playing Gestures: swipe left / right for the
+ * next / previous track, swipe up for the playlist, double-tap to play or
+ * pause, long-press for the Context Menu.
+ */
+private fun Modifier.artGestures(
+    controller: MediaController?, nav: Nav, ctx: Context,
+    onTap: () -> Unit = { nav.push(Screen.Playlist) },
+): Modifier {
+    val store = llm.slop.slopbox.SettingsStore.get(ctx)
+    fun on(cfg: String) = store.int(cfg) != 0
+    return this
+        .pointerInput(Unit) {
+            detectTapGestures(
+                onTap = { onTap() },
+                onDoubleTap = if (on(llm.slop.slopbox.SlopBoxSettings.DOUBLE_TAP)) ({
+                    controller?.let { if (it.isPlaying || it.playWhenReady) it.pause() else it.play() }
+                }) else null,
+                onLongPress = if (on(llm.slop.slopbox.SlopBoxSettings.LONG_PRESS)) ({
+                    nav.push(Screen.ContextMenu)
+                }) else null,
+            )
+        }
+        .pointerInput(Unit) {
+            var dx = 0f
+            var dy = 0f
+            detectDragGestures(
+                onDragStart = { dx = 0f; dy = 0f },
+                onDragEnd = {
+                    val min = 48.dp.toPx()
+                    when {
+                        kotlin.math.abs(dx) > kotlin.math.abs(dy) && kotlin.math.abs(dx) > min &&
+                            on(llm.slop.slopbox.SlopBoxSettings.SWIPE_TRACKS) ->
+                            // Swipe left (content moves left) = next, as in most players.
+                            if (dx < 0) controller?.seekToNext() else controller?.seekToPrevious()
+                        dy < -min && kotlin.math.abs(dy) > kotlin.math.abs(dx) &&
+                            on(llm.slop.slopbox.SlopBoxSettings.SWIPE_PLAYLIST) -> nav.push(Screen.Playlist)
+                    }
+                },
+            ) { ch, d -> ch.consume(); dx += d.x; dy += d.y }
+        }
+}
+
+/** A strip where dragging up or down changes the media volume, the full range over the strip's height. */
+@Composable
+private fun EdgeVolume(ctx: Context, modifier: Modifier, onChange: () -> Unit) {
+    val am = remember { ctx.getSystemService(AudioManager::class.java) }
+    val changed by rememberUpdatedState(onChange)
+    Box(modifier.pointerInput(Unit) {
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        var start = 0
+        var moved = 0f
+        detectVerticalDragGestures(
+            onDragStart = { start = am.getStreamVolume(AudioManager.STREAM_MUSIC); moved = 0f; changed() },
+        ) { ch, dy ->
+            ch.consume()
+            moved += dy
+            val v = (start - moved / size.height * max).toInt().coerceIn(0, max)
+            if (v != am.getStreamVolume(AudioManager.STREAM_MUSIC)) am.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0)
+            changed()
+        }
+    })
 }

@@ -1,6 +1,6 @@
 # SlopBox UI: touch-first and themeable
 
-Status: planned 2026-11-21. Done: steps 1, 2, 5, 6, 7, 10.
+Status: planned 2026-11-21. Done: steps 1, 2, 5, 6, 7, 10, 11; step 9 started (SlopBox menu with Now Playing Gestures).
 
 ## Goal
 

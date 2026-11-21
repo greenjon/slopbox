@@ -136,8 +136,10 @@ class RbCatalog(
         fun load(context: Context): RbCatalog {
             val json = JSONObject(context.assets.open("rockbox_settings.json").bufferedReader().readText())
             val lang = json.getJSONObject("lang").let { o -> o.keys().asSequence().associateWith { o.getString(it) } }
-            val settings = json.getJSONArray("settings").objects().map { parseSetting(it) }
-            val menu = parseMenu(json.getJSONObject("menu"), settings, lang)
+            val rockbox = json.getJSONArray("settings").objects().map { parseSetting(it) }
+            val extra = SlopBoxSettings.ALL.mapIndexed { i, x -> x.setting(rockbox.size + i) }
+            val settings = rockbox + extra
+            val menu = SlopBoxSettings.addMenu(parseMenu(json.getJSONObject("menu"), settings, lang), lang, rockbox.size)
             return RbCatalog(settings, menu, lang, json.optString("rockbox_revision"))
         }
 
@@ -454,6 +456,8 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "foreground color", "background color", "line selector start color", "line selector end color",
             "line selector text color", "list separator color", "list separator height", "selector type",
             "scrollbar", "scrollbar width",
+            SlopBoxSettings.SWIPE_TRACKS, SlopBoxSettings.SWIPE_PLAYLIST, SlopBoxSettings.DOUBLE_TAP,
+            SlopBoxSettings.LONG_PRESS, SlopBoxSettings.EDGE_VOLUME,
         )
 
         @Volatile private var instance: SettingsStore? = null
@@ -462,5 +466,43 @@ class SettingsStore private constructor(private val context: Context, val catalo
             instance ?: SettingsStore(context.applicationContext, RbCatalog.load(context.applicationContext))
                 .also { instance = it; it.applyAllToEngine() }
         }
+    }
+}
+
+/**
+ * Settings SlopBox has and Rockbox doesn't, in Theme Settings › SlopBox.
+ * They live in config.cfg under "slopbox ..." names, which Rockbox ignores.
+ */
+object SlopBoxSettings {
+    class Bool(val cfg: String, val title: String, val default: Boolean) {
+        fun setting(index: Int) = RbSetting(index, cfg, RbFlags.F_T_BOOL, title, "bool", if (default) 1 else 0,
+            null, listOf(0 to "Off", 1 to "On"), listOf("off", "on"), null)
+    }
+
+    const val SWIPE_TRACKS = "slopbox swipe tracks"
+    const val SWIPE_PLAYLIST = "slopbox swipe playlist"
+    const val DOUBLE_TAP = "slopbox double tap play"
+    const val LONG_PRESS = "slopbox long press menu"
+    const val EDGE_VOLUME = "slopbox edge volume"
+
+    val ALL = listOf(
+        Bool(SWIPE_TRACKS, "Swipe Art to Change Track", true),
+        Bool(SWIPE_PLAYLIST, "Swipe Up for Playlist", true),
+        Bool(DOUBLE_TAP, "Double-Tap to Play/Pause", true),
+        Bool(LONG_PRESS, "Long-Press for Context Menu", true),
+        Bool(EDGE_VOLUME, "Right Edge Volume", true),
+    )
+
+    /** Theme Settings gets a SlopBox menu holding a Now Playing Gestures menu. */
+    fun addMenu(root: RbMenuItem, lang: Map<String, String>, first: Int): RbMenuItem {
+        val theme = lang["LANG_THEME_MENU"] ?: "Theme Settings"
+        val gestures = RbMenuItem(RbMenuItem.MT_MENU, "Now Playing Gestures", -1, null, null,
+            ALL.indices.map { i -> RbMenuItem(RbMenuItem.MT_SETTING, ALL[i].title, first + i, null, null, emptyList()) })
+        val slopbox = RbMenuItem(RbMenuItem.MT_MENU, "SlopBox", -1, null, null, listOf(gestures))
+        return RbMenuItem(root.type, root.text, root.setting, root.function, root.param,
+            root.items.map { m ->
+                if (m.isMenu && m.text == theme) RbMenuItem(m.type, m.text, m.setting, m.function, m.param, m.items + slopbox, m.textFn)
+                else m
+            }, root.textFn)
     }
 }

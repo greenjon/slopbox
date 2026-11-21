@@ -180,7 +180,7 @@ fun DatabaseScreen(controller: MediaController?, nav: Nav, state: DatabaseState,
     Column(Modifier.fillMaxSize()) {
         TitleBar(title, onBack = { if (state.stack.size > 1) state.stack.removeAt(state.stack.lastIndex) else nav.pop() }) {
             BarButton(G.ListC) { dbMenu = true }
-            BarButton(G.Play) { nav.toNowPlaying() }
+            NowPlayingButton(nav)
         }
         TagDb.progress?.let { ListNote(it) }
         when {

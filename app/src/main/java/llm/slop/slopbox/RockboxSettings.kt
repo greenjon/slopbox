@@ -143,6 +143,12 @@ class RbCatalog(
             else -> null
         }
 
+        /**
+         * Defaults SlopBox changes from Rockbox's (each listed in DIFFERENCES.md).
+         * Status Bar: Bottom, where the mini-player is in thumb reach (Rockbox: Top).
+         */
+        private val SLOPBOX_DEFAULTS: Map<String, Any> = mapOf("statusbar" to 2)
+
         private fun parseSetting(o: JSONObject): RbSetting {
             val kind = o.getString("kind")
             val sub = o.optJSONObject(kind)
@@ -161,7 +167,7 @@ class RbCatalog(
             val cfgVals = (sub?.optString("cfg_vals")?.takeIf { it.isNotEmpty() && it != "null" }
                 ?: o.optString("cfg_vals").takeIf { it.isNotEmpty() && it != "null" })
                 ?.split(',')
-            val def = o.opt("default")
+            val def = SLOPBOX_DEFAULTS[o.optString("cfg")] ?: o.opt("default")
             return RbSetting(
                 index = o.getInt("index"),
                 cfg = o.optString("cfg").takeIf { !o.isNull("cfg") },
@@ -430,7 +436,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "start directory", "playlist catalog directory", "gather runtime data",
             "qs top", "qs left", "qs right", "qs bottom", "shortcuts instead of quickscreen",
             "autoresume next track paths", "default codepage", "tagcache_autoupdate", "max files in dir", "max files in playlist", "root menu order", "sort case", "sort dirs", "sort files", "sort interpret number", "show files",
-            "show filename exts", "follow playlist", "show path in browser", "keep directory", "show icons",
+            "show filename exts", "follow playlist", "show path in browser", "keep directory", "show icons", "statusbar",
         )
 
         @Volatile private var instance: SettingsStore? = null

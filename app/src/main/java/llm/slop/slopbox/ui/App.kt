@@ -13,6 +13,8 @@ package llm.slop.slopbox.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawing
@@ -86,7 +88,11 @@ fun SlopApp(
 ) {
     BackHandler(enabled = nav.stack.size > 1) { nav.pop() }
     Backdrop {
-        Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        // Rockbox's Status Bar setting places the mini-player: Off, Top or Bottom.
+        val bar = statusBarPlace()
+        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+          if (bar == 1) MiniPlayer(controller, nav, atTop = true)
+          Box(Modifier.weight(1f).fillMaxWidth()) {
             when (nav.top) {
                 Screen.MainMenu -> MainMenu(controller, nav)
                 Screen.Browser -> BrowserScreen(controller, nav, browser, pickRoot)
@@ -116,6 +122,8 @@ fun SlopApp(
                 Screen.PluginRater -> TrackRaterScreen(controller, nav)
                 Screen.System -> SystemMenu(nav)
             }
+          }
+          if (bar == 2) MiniPlayer(controller, nav, atTop = false)
         }
     }
 }

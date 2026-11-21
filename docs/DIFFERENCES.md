@@ -317,6 +317,15 @@ Anything new goes here in the same change that introduces it.
   Context Menu popup on any touch, over the track lines. SlopBox shows it
   only for touches on the album art and track lines, so using the progress
   bar or the buttons doesn't hide what's playing.
+- **Status Bar.** Rockbox's status bar shows battery, volume and play
+  state icons. SlopBox has Android's for that, and uses the Status Bar
+  setting to place a mini-player instead: a strip with a progress line,
+  album art, title, artist and play/pause (hold: stop). Tapping it, or
+  swiping from it into the screen, opens the While Playing Screen. It is
+  hidden on screens that already show the track (While Playing Screen,
+  album art, LRC Player, Track Rater). The default is Bottom (Rockbox's is
+  Top), so a `.cfg` without a Status Bar line gives Bottom. The Files and
+  Database title bars' ▶ button appears only with the Status Bar off.
 - **Main menu.** It has Rockbox's order and Settings > Main Menu
   customisation (a port of the main_menu_config plugin), but only the items
   SlopBox has: no Recording or FM Radio. SlopBox doesn't use the Rockbox name

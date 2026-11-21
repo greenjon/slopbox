@@ -1,6 +1,6 @@
 # SlopBox UI: touch-first and themeable
 
-Status: planned 2026-11-21, nothing built yet.
+Status: planned 2026-11-21. Done: steps 1-2.
 
 ## Goal
 

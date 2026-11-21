@@ -59,9 +59,13 @@ Anything new goes here in the same change that introduces it.
 - **Automatic Resume custom folders.** "In custom directories only" opens a
   port of Rockbox's db_folder_select plugin over the music folder, and the
   list is matched as Rockbox's autoresumable() does.
-- **Browse actions.** Themes, fonts, skins and languages aren't available.
+- **Browse actions.** Fonts, skins and languages aren't available.
   Browse .cfg Files and Browse EQ Presets open Android's file picker. There is
-  no bundled EQ preset folder.
+  no bundled EQ preset folder. Browse Theme Files lists SlopBox's own themes
+  (Cabbie, Ocean, OLED Black, Light, High Contrast; colours, Line Selector
+  Type and Line Separator only) rather than Rockbox's, marks the one in use,
+  and stays open so several can be tried; "Other theme file…" opens
+  Android's file picker for themes of your own.
 - **Stored but unused.** Most General and Theme settings are saved and
   written to `.cfg` files but don't change anything yet.
 - **`.cfg` header.** Saved files say they were created by SlopBox, and give
@@ -316,8 +320,9 @@ Anything new goes here in the same change that introduces it.
 - **Theme colours.** Foreground, background, line selector start / end /
   text colour, list separator colour, Line Separator and Line Selector Type
   work and are read from `.cfg` files as Rockbox writes them (`rrggbb`).
-  The defaults are cabbiev2's colours, the theme Rockbox installs by
-  default, not the values compiled into Rockbox's settings table. With no
+  The defaults are cabbiev2's colours and its touchscreen Line Separator
+  (Auto), the theme Rockbox installs by default, not the values compiled
+  into Rockbox's settings table. With no
   bitmaps to recolour, SlopBox derives the rest: the backdrop runs from a
   lighter shade of the background at the top to the background, dim text
   and the greys of bars and panels are mixes of foreground and background,
@@ -333,7 +338,11 @@ Anything new goes here in the same change that introduces it.
   with −/+ (repeat while held), then OK or Cancel. The picker shows a sample
   list in the new colour, and the Colours menu shows each colour's hex value.
   Reset Colours returns to cabbiev2's colours, SlopBox's defaults, rather
-  than the LCD defaults.
+  than the LCD defaults. When the chosen text and background are too close
+  to read (under WCAG's 3:1), the screens on the way to the colours
+  (Settings, Theme Settings, Colours, the picker, Browse Theme Files) draw
+  in cabbiev2's colours so the choice can be undone; the picker warns
+  before such a colour is saved.
 - **Playing screen popup.** cabbiev2 shows its Browse / Quick Screen /
   Context Menu popup on any touch, over the track lines. SlopBox shows it
   only for touches on the album art and track lines, so using the progress

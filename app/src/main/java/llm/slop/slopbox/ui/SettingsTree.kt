@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -157,6 +158,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
             }
             "browse_folder" -> when (item.param) {
                 "config", "eqs" -> loader.launch(arrayOf("*/*"))
+                "themes" -> stack += Page.Themes(item.text)
                 else -> message = "${item.text}: not available in SlopBox yet."
             }
             // General Settings › Database
@@ -272,6 +274,14 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
     }
 
     val page = stack.last()
+    // The way to the colour settings (Theme Settings, Colours, Line Selector
+    // Colours, the picker) stays readable whatever colours are chosen.
+    fun leadsToColours(item: RbMenuItem, depth: Int): Boolean =
+        item.function in COLOUR_FUNCTIONS || (depth > 0 && item.items.any { leadsToColours(it, depth - 1) })
+    val colourPage = page is Page.Colour || page is Page.Themes ||
+        (page is Page.Menu && page.item.items.any { leadsToColours(it, 2) })
+    androidx.compose.runtime.SideEffect { Cabbie.safeMode = colourPage }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { Cabbie.safeMode = false } }
     Column(Modifier.fillMaxSize()) {
         // The folder picker has its own title bar (its back asks to save).
         if (page !is Page.FolderSel && page !is Page.MainMenuCfg) TitleBar(if (page is Page.ContextItem) cat.str("LANG_ONPLAY_MENU_TITLE") else page.title, onBack = ::back)
@@ -335,6 +345,20 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
             }
             is Page.GraphicalEq -> GraphicalEq(store)
             is Page.Colour -> ColorPicker(store, page.which) { back() }
+            is Page.Themes -> {
+                val themes = remember { BundledThemes.list(ctx) }
+                val current = remember(revision) { themes.map { it.matches(store) } }
+                LazyColumn(Modifier.fillMaxSize()) {
+                    itemsIndexed(themes) { i, t ->
+                        RockRow(t.name, icon = G.Config, selected = current[i]) {
+                            store.loadCfg(t.text)
+                            toast(cat.str("LANG_SETTINGS_LOADED"))
+                        }
+                    }
+                    // Theme files of your own, as saved by Save Theme Settings.
+                    item { RockRow("Other theme file…", icon = G.TangoFolder) { loader.launch(arrayOf("*/*")) } }
+                }
+            }
             is Page.MainMenuCfg -> MainMenuConfig { stack.removeAt(stack.lastIndex) }
             is Page.FolderSel -> {
                 val target = cat.byCfg[page.cfg]
@@ -401,6 +425,8 @@ private fun sleepTimerLabel(cat: llm.slop.slopbox.RbCatalog, store: SettingsStor
     return "%s (%s)".format(cat.str(if (sec > 0) "LANG_SLEEP_TIMER_CANCEL_CURRENT" else "LANG_SLEEP_TIMER_START_CURRENT"), time)
 }
 
+private val COLOUR_FUNCTIONS = setOf("set_color_func", "reset_color")
+
 private sealed interface Page {
     val title: String
     data class Menu(val item: RbMenuItem) : Page { override val title get() = item.text }
@@ -416,6 +442,7 @@ private sealed interface Page {
     data class GraphicalEq(override val title: String) : Page
     /** A theme colour's picker; [which] is Rockbox's COLOR_* index. */
     data class Colour(override val title: String, val which: Int) : Page
+    data class Themes(override val title: String) : Page
     data class MainMenuCfg(override val title: String) : Page
     /** db_folder_select for a path-list setting; [revert] restores [revertTo] if nothing is saved. */
     data class FolderSel(override val title: String, val cfg: String, val revert: llm.slop.slopbox.RbSetting, val revertTo: Int) : Page

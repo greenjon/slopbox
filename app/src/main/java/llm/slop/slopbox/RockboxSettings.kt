@@ -159,6 +159,8 @@ class RbCatalog(
             "line selector start color" to 0xFDE89E,
             "line selector end color" to 0xB58C00,
             "line selector text color" to 0x000000,
+            // WPSLIST "list separator height..+&touchscreen: auto"
+            "list separator height" to -1,
         )
 
         private fun parseSetting(o: JSONObject): RbSetting {

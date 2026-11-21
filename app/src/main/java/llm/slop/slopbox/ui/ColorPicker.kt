@@ -154,7 +154,7 @@ fun ColorPicker(store: SettingsStore, which: Int, onDone: () -> Unit) {
 /** A list as it would look with the colour being picked: a plain line, a selected line, separators. */
 @Composable
 private fun Preview(which: Int, rgb: Int) {
-    val now = Cabbie.palette
+    val now = Cabbie.chosen
     val c = Color(0xFF000000.toInt() or rgb)
     val p = when (which) {
         0 -> now.copy(fg = c)
@@ -192,6 +192,12 @@ private fun Preview(which: Int, rgb: Int) {
         line("Database", true)
         line("Playlists", false)
     }
+    // SlopBox: say when text would be hard to read (the colour screens then fall back to cabbiev2's).
+    if (!p.readable) BasicText(
+        "Hard to read: text and background are too close.",
+        Modifier.fillMaxWidth(),
+        style = Cabbie.small.copy(color = Cabbie.Text, textAlign = TextAlign.Center),
+    )
 }
 
 /** A drag-or-tap bar from [lo] to [hi] with a thumb at [fraction]. */

@@ -59,8 +59,17 @@ data class Palette(
     /** Rockbox "selector type": 0 pointer, 1 bar (inverse), 2 bar (solid colour), 3 bar (gradient). */
     val selectorType: Int = 3,
 ) {
+    /** Text and background far enough apart to read (WCAG's 3:1, for large text). */
+    val readable get() = contrast(fg, bg) >= 3f
+
     companion object {
         val CABBIEV2 = Palette()
+
+        /** WCAG contrast ratio, 1 to 21. */
+        fun contrast(a: Color, b: Color): Float {
+            val la = a.luminance(); val lb = b.luminance()
+            return (maxOf(la, lb) + 0.05f) / (minOf(la, lb) + 0.05f)
+        }
 
         fun from(store: llm.slop.slopbox.SettingsStore): Palette {
             fun rgb(cfg: String, d: Color) = store.catalog.byCfg[cfg]?.let { Color(0xFF000000.toInt() or store.int(it)) } ?: d
@@ -87,13 +96,24 @@ data class Palette(
  * ([Palette]); they are snapshot state, so screens redraw when they change.
  */
 object Cabbie {
-    var palette by mutableStateOf(Palette.CABBIEV2)
+    /** The colours the settings give. */
+    var chosen by mutableStateOf(Palette.CABBIEV2)
         private set
+
+    /**
+     * Set while the colour settings are on screen: if the chosen colours are
+     * hard to read, those screens draw in cabbiev2's, so a bad choice can
+     * always be undone.
+     */
+    var safeMode by mutableStateOf(false)
+
+    /** The colours to draw with. */
+    val palette: Palette get() = chosen.let { if (safeMode && !it.readable) Palette.CABBIEV2 else it }
 
     /** Re-read the theme colours from the settings. */
     fun apply(store: llm.slop.slopbox.SettingsStore) {
         val p = Palette.from(store)
-        if (p != palette) palette = p
+        if (p != chosen) chosen = p
     }
 
     val Text get() = palette.fg

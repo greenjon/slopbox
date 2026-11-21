@@ -301,9 +301,17 @@ Anything new goes here in the same change that introduces it.
   interface instead of Rockbox's skins.
 - **Main menu.** It has Rockbox's order and Settings > Main Menu
   customisation (a port of the main_menu_config plugin), but only the items
-  SlopBox has: no Recording or FM Radio. Its System menu so far has About SlopBox,
-  Rockbox Credits and License in place of Rockbox Info and the debug
-  screens. SlopBox doesn't use the Rockbox name or logo for itself.
+  SlopBox has: no Recording or FM Radio. SlopBox doesn't use the Rockbox name
+  or logo for itself.
+- **System menu.** Rockbox's Rockbox Info, Credits, Running Time and Legal
+  Notices, plus About SlopBox; no Debug (Keep Out) menu, since its screens
+  are about player hardware. Rockbox Info is "SlopBox Info": battery, the
+  music folder, version (with the Rockbox revision), date, time and free
+  space on internal storage and the SD card. It has no buffer line (SlopBox
+  decodes as it plays rather than filling a big buffer) and no battery time
+  estimate. Running Time counts while SlopBox's playback service is running,
+  not while the phone is on; it resets when the charger is unplugged, as in
+  Rockbox.
 - **Quick Screen.** It shows Rockbox's four configurable items and uses
   Rockbox's touchscreen rule (a tap in the top, left, right or bottom third
   changes that item; anywhere else leaves), drawn as text rather than with

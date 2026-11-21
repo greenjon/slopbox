@@ -5,6 +5,7 @@
  * Derived from Rockbox (https://www.rockbox.org/):
  *   apps/misc.c - Copyright (C) 2002 by Daniel Stenberg
  *   firmware/powermgmt.c - Copyright (C) 2002 by Heikki Hannikainen, Uwe Freese
+ *   apps/settings.c - Copyright (C) 2002 by Stuart Martin
  * and the other Rockbox contributors (third_party/rockbox/docs/CREDITS).
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -106,6 +107,7 @@ object PowerMgmt {
             val t = target ?: return
             val now = SystemClock.elapsedRealtime()
             val charging = charging()
+            runtimeTick(now, charging)
             if (t.isPlaying || charging) lastEventMs = now
             val timeoutMs = setting("idle poweroff") * 60_000L
             if (timeoutMs > 0 && !t.isPlaying && now - lastEventMs > timeoutMs) {
@@ -121,4 +123,35 @@ object PowerMgmt {
     }
 
     private const val TICK_MS = 1000L
+
+    // ---- Running Time (Rockbox misc.c SYS_CHARGER_DISCONNECTED -> reset_runtime(); topruntime as in settings.c) ----
+
+    private var lastRuntimeMs = 0L
+    private var wasCharging: Boolean? = null
+    private fun status() = context?.getSharedPreferences("global_status", Context.MODE_PRIVATE)
+
+    /** Seconds SlopBox has run since the charger was last unplugged, and the most ever. */
+    val runtime: Long get() = status()?.getLong("runtime", 0L) ?: 0L
+    val topRuntime: Long get() = status()?.getLong("topruntime", 0L) ?: 0L
+
+    private fun runtimeTick(now: Long, charging: Boolean) {
+        val prefs = status() ?: return
+        // Rockbox resets the running time when the charger is disconnected.
+        if (wasCharging == true && !charging) {
+            prefs.edit().putLong("runtime", 0L).apply()
+            lastRuntimeMs = now
+        }
+        wasCharging = charging
+        if (lastRuntimeMs == 0L) { lastRuntimeMs = now; return }
+        val secs = (now - lastRuntimeMs) / 1000
+        if (secs < 10) return
+        lastRuntimeMs += secs * 1000
+        val rt = prefs.getLong("runtime", 0L) + secs
+        prefs.edit().putLong("runtime", rt).putLong("topruntime", maxOf(rt, prefs.getLong("topruntime", 0L))).apply()
+    }
+
+    /** "Clear Time?" on the Running Time screen. */
+    fun clearRuntime(top: Boolean) {
+        status()?.edit()?.putLong(if (top) "topruntime" else "runtime", 0L)?.apply()
+    }
 }

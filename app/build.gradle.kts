@@ -69,6 +69,7 @@ val rockboxAssets = layout.buildDirectory.dir("generated/rockboxAssets")
 val copyRockboxAssets by tasks.registering(Copy::class) {
     from(rootProject.file("third_party/rockbox/apps/tagnavi.config"))
     from(rootProject.file("third_party/rockbox/docs/CREDITS"))
+    from(rootProject.file("third_party/rockbox/docs/LICENSES"))
     from(rootProject.file("LICENSE"))
     into(rockboxAssets.map { it.dir("rockbox") })
 }

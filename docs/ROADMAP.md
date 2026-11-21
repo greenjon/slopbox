@@ -4,11 +4,10 @@
 
 - Fixes from testing against a full music library (thousands of tracks).
 - ~~A-B repeat buttons on the playing screen~~ (done).
-- Settings gaps: the graphical EQ, string and filename settings such as
+- ~~Settings gaps: the graphical EQ, string and filename settings such as
   Automatic Resume's custom directories, and the remaining custom-type
-  settings that can't be edited yet (see DIFFERENCES.md).
-- System menu: SlopBox Info, Running Time and Rockbox's other system items
-  that make sense on a phone (About, Rockbox Credits and License are in).
+  settings~~ (done).
+- ~~System menu: SlopBox Info, Credits, Running Time, Legal Notices~~ (done).
 - ~~Database scans save their progress as they go~~ (done).
 - A signed release build.
 

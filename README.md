@@ -14,7 +14,7 @@ submodule in `third_party/rockbox` and is used unmodified, with all its
 copyright files and notices. SlopBox source files that port or derive from
 Rockbox code name the Rockbox files and their copyright holders in their
 headers; Rockbox's full contributor list is `third_party/rockbox/docs/CREDITS`
-and is shown in the app (System › Rockbox Credits). The interface follows
+and is shown in the app (System › Credits). The interface follows
 Rockbox's cabbiev2 theme by Johannes Voggenthaler, Apoo Maha, Marc Guay, Alex
 Vanderpol, Jerry Lange, Keith Perri, Mark Fawcus and Marianne Arnold (based on
 Cabbie by Yohann Misquitta).

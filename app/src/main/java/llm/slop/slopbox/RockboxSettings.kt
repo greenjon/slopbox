@@ -429,7 +429,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             "context_wps", "Semitone pitch change", "Timestretch mode",
             "start directory", "playlist catalog directory", "gather runtime data",
             "qs top", "qs left", "qs right", "qs bottom", "shortcuts instead of quickscreen",
-            "autoresume next track paths", "default codepage", "tagcache_autoupdate", "max files in dir", "max files in playlist", "sort case", "sort dirs", "sort files", "sort interpret number", "show files",
+            "autoresume next track paths", "default codepage", "tagcache_autoupdate", "max files in dir", "max files in playlist", "root menu order", "sort case", "sort dirs", "sort files", "sort interpret number", "show files",
             "show filename exts", "follow playlist", "show path in browser", "keep directory", "show icons",
         )
 

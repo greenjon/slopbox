@@ -144,6 +144,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
             "eq_do_simple_menu" -> stack += Page.SimpleEq(item.text)
             "eq_do_advanced_menu" -> stack += Page.AdvancedEq(item.text)
             "eq_menu_graphical" -> stack += Page.GraphicalEq(item.text)
+            "main_menu_config" -> stack += Page.MainMenuCfg(item.text)
             "eq_reset_defaults" -> { store.resetEq(); toast(item.text) }
             "reset_settings" -> confirm = cat.str("LANG_ARE_YOU_SURE") to { store.resetAll() }
             "eq_save_preset" -> { saveMode = SettingsStore.SAVE_EQ; saver.launch("eq.cfg") }
@@ -278,7 +279,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
     val page = stack.last()
     Column(Modifier.fillMaxSize()) {
         // The folder picker has its own title bar (its back asks to save).
-        if (page !is Page.FolderSel) TitleBar(if (page is Page.ContextItem) cat.str("LANG_ONPLAY_MENU_TITLE") else page.title, onBack = ::back)
+        if (page !is Page.FolderSel && page !is Page.MainMenuCfg) TitleBar(if (page is Page.ContextItem) cat.str("LANG_ONPLAY_MENU_TITLE") else page.title, onBack = ::back)
         when (page) {
             is Page.Menu -> LazyColumn(Modifier.fillMaxSize()) {
                 items(page.item.items) { item ->
@@ -328,6 +329,7 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
                 }
             }
             is Page.GraphicalEq -> GraphicalEq(store)
+            is Page.MainMenuCfg -> MainMenuConfig { stack.removeAt(stack.lastIndex) }
             is Page.FolderSel -> {
                 val target = cat.byCfg[page.cfg]
                 FolderSelect(page.title, target?.let { store.text(it) } ?: "") { result ->
@@ -406,6 +408,7 @@ private sealed interface Page {
     data class SimpleEq(override val title: String) : Page
     data class ContextItem(val item: Int) : Page { override val title get() = "" }
     data class GraphicalEq(override val title: String) : Page
+    data class MainMenuCfg(override val title: String) : Page
     /** db_folder_select for a path-list setting; [revert] restores [revertTo] if nothing is saved. */
     data class FolderSel(override val title: String, val cfg: String, val revert: llm.slop.slopbox.RbSetting, val revertTo: Int) : Page
     data class AdvancedEq(override val title: String) : Page

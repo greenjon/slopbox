@@ -104,6 +104,8 @@ object TagDb {
     /** Bumped when statistics change, so database lists are worked out again. */
     var statsRevision by mutableIntStateOf(0)
         private set
+    /** Called (on any thread) when statistics change: SlopPlayer picks the next track again. */
+    @Volatile var onStatsChanged: (() -> Unit)? = null
 
     /** A copy of a track's statistics (zeros when it has none). */
     fun statsOf(id: String): Stats = synchronized(stats) {
@@ -225,6 +227,7 @@ object TagDb {
                 partialFile.delete()
                 fullMarker.delete()
                 statsRevision++
+                onStatsChanged?.invoke()
             } catch (e: Exception) {
                 Log.w(TAG, "scan failed", e)
             } finally {
@@ -293,6 +296,7 @@ object TagDb {
 
     private fun changed(ctx: Context) {
         statsRevision++
+        onStatsChanged?.invoke()
         val app = ctx.applicationContext
         scope.launch { runCatching { write(File(app.filesDir, FILE)) } }
     }

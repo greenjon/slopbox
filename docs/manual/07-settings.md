@@ -98,6 +98,15 @@ played: about a quarter of a second, or longer with crossfade on.
 - **Album Art**: Off, Prefer Embedded, or Prefer Image File (a picture in
   the folder such as `cover.jpg` or `folder.jpg`).
 - **Logging**: writes a playback log (used by the Last.fm Logger plugin).
+- **Minimum Stars** (SlopBox): Off, or ★1 to ★5. Next, previous and the
+  move to the next track pass over tracks rated below this. The playlist
+  isn't changed, so set it back to Off to hear everything again. A track
+  you pick from a list always plays. The While Playing Screen shows the
+  setting (for example "★4+") under the track number while it's on, and
+  the *Next:* line shows the track that will really play next.
+- **Play Unrated Tracks** (SlopBox): with Minimum Stars on, whether tracks
+  without a rating play too. On by default, so ★4 plays your four- and
+  five-star tracks mixed with ones you haven't rated yet.
 
 ## General Settings
 

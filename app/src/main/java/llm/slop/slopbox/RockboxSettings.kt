@@ -506,6 +506,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             SlopBoxSettings.LONG_PRESS, SlopBoxSettings.EDGE_VOLUME, SlopBoxSettings.HAPTICS,
             SlopBoxSettings.ART_ACCENT, "wps", SlopBoxSettings.FLAT, SlopBoxSettings.TEXT_SIZE, SlopBoxSettings.BOTTOM_NAV,
             SlopBoxSettings.RATER_SKIP_RATED, SlopBoxSettings.RATER_NEXT,
+            SlopBoxSettings.MIN_STARS, SlopBoxSettings.PLAY_UNRATED,
         )
 
         @Volatile private var instance: SettingsStore? = null
@@ -518,7 +519,8 @@ class SettingsStore private constructor(private val context: Context, val catalo
 }
 
 /**
- * Settings SlopBox has and Rockbox doesn't, in Theme Settings › SlopBox.
+ * Settings SlopBox has and Rockbox doesn't, in Theme Settings › SlopBox
+ * (and the rating filter, at the end of Playback Settings).
  * They live in config.cfg under "slopbox ..." names, which Rockbox ignores.
  */
 object SlopBoxSettings {
@@ -545,6 +547,8 @@ object SlopBoxSettings {
     const val BOTTOM_NAV = "slopbox navigation at bottom"
     const val RATER_SKIP_RATED = "slopbox rater skip rated"
     const val RATER_NEXT = "slopbox rater next after rating"
+    const val MIN_STARS = "slopbox minimum stars"
+    const val PLAY_UNRATED = "slopbox play unrated"
 
     val ALL: List<Extra> = listOf(
         Bool(SWIPE_TRACKS, "Swipe Art to Change Track", true),
@@ -560,24 +564,33 @@ object SlopBoxSettings {
         // The Rater While Playing Screen's two settings (also in its context menu).
         Bool(RATER_SKIP_RATED, "Rater: Skip Rated Tracks", true),
         Bool(RATER_NEXT, "Rater: Next Track After Rating", true),
+        // In Playback Settings, not the SlopBox menu (see [PLAYBACK]).
+        Choice(MIN_STARS, "Minimum Stars", listOf("Off", "★1", "★2", "★3", "★4", "★5"),
+            listOf("off", "1", "2", "3", "4", "5"), 0),
+        Bool(PLAY_UNRATED, "Play Unrated Tracks", true),
     )
 
     /** Text Size as a scale for type and line heights. */
     val TEXT_SCALES = listOf(0.85f, 1f, 1.2f, 1.45f)
     /** How many of [ALL] are Now Playing gestures (the rest sit directly in the SlopBox menu). */
     private const val GESTURES = 5
+    /** The last [PLAYBACK] of [ALL] go at the end of Playback Settings. */
+    private const val PLAYBACK = 2
 
-    /** Theme Settings gets a SlopBox menu holding a Now Playing Gestures menu. */
+    /** Theme Settings gets a SlopBox menu holding a Now Playing Gestures menu; Playback Settings gets the rating filter. */
     fun addMenu(root: RbMenuItem, lang: Map<String, String>, first: Int): RbMenuItem {
         val theme = lang["LANG_THEME_MENU"] ?: "Theme Settings"
         fun item(i: Int) = RbMenuItem(RbMenuItem.MT_SETTING, ALL[i].title, first + i, null, null, emptyList())
         val gestures = RbMenuItem(RbMenuItem.MT_MENU, "Now Playing Gestures", -1, null, null,
             (0 until GESTURES).map(::item))
         val slopbox = RbMenuItem(RbMenuItem.MT_MENU, "SlopBox", -1, null, null,
-            listOf(gestures) + (GESTURES until ALL.size).map(::item))
+            listOf(gestures) + (GESTURES until ALL.size - PLAYBACK).map(::item))
+        val playback = lang["LANG_PLAYBACK"] ?: "Playback Settings"
+        val playbackItems = (ALL.size - PLAYBACK until ALL.size).map(::item)
         return RbMenuItem(root.type, root.text, root.setting, root.function, root.param,
             root.items.map { m ->
                 if (m.isMenu && m.text == theme) RbMenuItem(m.type, m.text, m.setting, m.function, m.param, m.items + slopbox, m.textFn)
+                else if (m.isMenu && m.text == playback) RbMenuItem(m.type, m.text, m.setting, m.function, m.param, m.items + playbackItems, m.textFn)
                 else m
             }, root.textFn)
     }

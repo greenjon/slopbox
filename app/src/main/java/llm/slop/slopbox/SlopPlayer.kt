@@ -145,6 +145,8 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         current = this
         Pitch.onChange = { handler.post { invalidateState() } }
         store.addListener(settingsListener)
+        // A track rated in or out of the filter: pick the following one again.
+        llm.slop.slopbox.ui.db.TagDb.onStatsChanged = { handler.post { queueFollowing() } }
         if (setting("play log") != 0) memory.startLog()
         restorePlaylist()
     }
@@ -383,20 +385,25 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     private fun followingIndex(from: Int = index): Int? = when {
         entries.isEmpty() || from < 0 -> null
         repeat == 2 -> from                        // One
-        else -> unratedFrom(from + 1)
-            ?: if (repeat == 1) unratedFrom(0) else null   // All; Off, A-B; Shuffle reshuffles at the end
+        else -> playableFrom(from + 1)
+            ?: if (repeat == 1) playableFrom(0) else null   // All; Off, A-B; Shuffle reshuffles at the end
     }
 
     /**
-     * SlopBox Rater layout with Skip Rated Tracks on: the first entry from [i]
-     * that has no rating; otherwise just [i]. Null past the end.
+     * SlopBox rating filter (Minimum Stars, or the Rater layout's Skip Rated):
+     * the first entry from [i] it lets through. Null past the end.
      */
-    private fun unratedFrom(i: Int): Int? {
-        var j = i
-        if (llm.slop.slopbox.ui.Rater.skipping(store)) {
-            while (j < entries.size && llm.slop.slopbox.ui.Rater.rated(entries[j].item.mediaId)) j++
-        }
+    private fun playableFrom(i: Int): Int? {
+        var j = i.coerceAtLeast(0)
+        while (j < entries.size && !llm.slop.slopbox.ui.RatingFilter.passes(store, entries[j].item.mediaId)) j++
         return j.takeIf { it < entries.size }
+    }
+
+    /** [playableFrom] going back, for Previous: the last entry at or before [i]. */
+    private fun playableBefore(i: Int): Int? {
+        var j = i.coerceAtMost(entries.size - 1)
+        while (j >= 0 && !llm.slop.slopbox.ui.RatingFilter.passes(store, entries[j].item.mediaId, backwards = true)) j--
+        return j.takeIf { it >= 0 }
     }
 
     // ---- Audio focus -------------------------------------------------------
@@ -821,6 +828,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         if (engineActive) trackFinished(entries.getOrNull(index), position, autoSkip = false)
         folderJob?.cancel()
         store.removeListener(settingsListener)
+        llm.slop.slopbox.ui.db.TagDb.onStatsChanged = null
         handler.removeCallbacks(poll)
         stopEngine()
         playWhenReady = false
@@ -1023,11 +1031,11 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
             currentCue?.skip(-1, position)?.let { return seekWithin(it) }   // curr_cuesheet_skip()
             return jumpTo(C.INDEX_UNSET, 0)
         }
-        val prev = when {
-            index > 0 -> index - 1
-            repeat == 1 || repeat == 3 -> entries.size - 1
-            changeFolder(-1, autoSkip = false) -> return
-            else -> return beep(noMore = true)   // audio_skip(): no track to go to
+        val prev = playableBefore(index - 1)
+            ?: if (repeat == 1 || repeat == 3) playableBefore(entries.size - 1) else null
+        if (prev == null) {
+            if (changeFolder(-1, autoSkip = false)) return
+            return beep(noMore = true)   // audio_skip(): no track to go to
         }
         beep(noMore = false)
         jumpTo(prev, 0)
@@ -1037,7 +1045,7 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
      *  folder, else just the "no more" beep. */
     private fun nextTrack() {
         currentCue?.skip(1, position)?.let { return seekWithin(it) }        // curr_cuesheet_skip()
-        val next = unratedFrom(index + 1)
+        val next = playableFrom(index + 1)
         when {
             next != null -> { beep(noMore = false); jumpTo(next, 0) }
             repeat == 3 -> {

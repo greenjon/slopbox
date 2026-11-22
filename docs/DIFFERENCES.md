@@ -135,6 +135,15 @@ Anything new goes here in the same change that introduces it.
 - **Start Screen.** If music is already playing when the app opens, it shows
   the playing screen whatever the setting says. Recent Bookmarks and Open
   Plugin open the Main Menu.
+- **Minimum Stars and Play Unrated Tracks.** SlopBox additions at the end
+  of Playback Settings (and Minimum Stars in the WPS context menu). Next,
+  previous and automatic track changes pass over playlist entries rated
+  below the minimum (stars are Rockbox ratings ÷ 2, rounded up), and over
+  unrated ones with Play Unrated off. The playlist isn't changed, and a
+  track picked from a list still plays. The playing screen shows the filter
+  under "3 of 12", and its *Next:* line skips filtered tracks. The Rater
+  layout's Skip Rated Tracks takes precedence while it's on (previous then
+  isn't filtered, so you can go back and rate a track again).
 - **Playback log.** The log is the app's `files/playback.log`, not
   `/.rockbox/playback.log`. Paths are storage paths ("/Music/…") for library
   files, and full paths for app-local files.

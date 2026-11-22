@@ -106,6 +106,8 @@ private data class Snap(
     val abB: Long = -1,
     /** Cuesheet track starts after the first (cue_draw_markers()). */
     val cueMarks: List<Long> = emptyList(),
+    /** SlopBox rating filter note ("★4+"), or null when it's off. */
+    val filter: String? = null,
 )
 
 private fun snap(c: MediaController, ctx: Context): Snap {
@@ -115,11 +117,15 @@ private fun snap(c: MediaController, ctx: Context): Snap {
     val info = Engine.trackInfo()
     val am = ctx.getSystemService(AudioManager::class.java)
     val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+    val store = llm.slop.slopbox.SettingsStore.get(ctx)
+    // Next: the one the rating filter lets through.
+    var nextIdx = index + 1
+    while (nextIdx < count && !RatingFilter.passes(store, c.getMediaItemAt(nextIdx).mediaId)) nextIdx++
     return Snap(
         count = count,
         index = index,
         item = c.currentMediaItem,
-        next = if (index + 1 < count) c.getMediaItemAt(index + 1) else null,
+        next = if (nextIdx < count) c.getMediaItemAt(nextIdx) else null,
         title = md.title?.toString().orEmpty(),
         artist = md.artist?.toString().orEmpty(),
         album = md.albumTitle?.toString().orEmpty(),
@@ -134,10 +140,11 @@ private fun snap(c: MediaController, ctx: Context): Snap {
         // %?fv<(vbr) |>%fb kbit/s %fc
         codecLine = if (info.codec.isNotEmpty()) "${info.bitrate} kbit/s ${info.codec}" else "",
         volume = am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max,
-        rbRepeat = llm.slop.slopbox.SettingsStore.get(ctx).int("repeat"),
+        rbRepeat = store.int("repeat"),
         abA = llm.slop.slopbox.SlopPlayer.current?.abMarkers?.first ?: -1,
         abB = llm.slop.slopbox.SlopPlayer.current?.abMarkers?.second ?: -1,
         cueMarks = llm.slop.slopbox.SlopPlayer.current?.cuesheet?.tracks?.drop(1)?.map { it.offsetMs } ?: emptyList(),
+        filter = RatingFilter.label(store),
     )
 }
 
@@ -336,7 +343,11 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
         }
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicText(fmt(shown), Modifier.weight(1f), style = Cabbie.small)
-            BasicText("${s.index + 1} of ${s.count}", Modifier.weight(1f), style = Cabbie.small.copy(textAlign = TextAlign.Center))
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                BasicText("${s.index + 1} of ${s.count}", style = Cabbie.small.copy(textAlign = TextAlign.Center))
+                // SlopBox: Minimum Stars is passing over tracks.
+                s.filter?.let { BasicText(it, style = Cabbie.small.copy(color = Cabbie.Dim, textAlign = TextAlign.Center), maxLines = 1) }
+            }
             // SlopBox: tap to switch between time left and the track's length.
             BasicText(
                 if (dur <= 0) "" else if (showTotal) fmt(dur) else fmt((dur - shown).coerceAtLeast(0)),

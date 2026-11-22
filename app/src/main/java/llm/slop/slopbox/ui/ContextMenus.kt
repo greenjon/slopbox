@@ -217,7 +217,7 @@ fun openWith(ctx: Context, uri: Uri, name: String) {
 
 /**
  * Rockbox wps_onplay_menu: Current Playlist, Add to Playlist, Sound Settings,
- * Playback Settings, (Set Rating), Bookmarks, Browse Cuesheet, then the four
+ * Playback Settings, Minimum Stars (SlopBox), (Set Rating), Bookmarks, Browse Cuesheet, then the four
  * context items from "context_wps" (item 0 is the WPS hotkey).
  */
 @Composable
@@ -344,6 +344,14 @@ fun WpsContextMenu(controller: MediaController?, nav: Nav, browser: BrowserState
             }
             item { RockRow(str(ctx, "LANG_SOUND_SETTINGS"), icon = G.Config) { nav.pop(); SettingsView.open(nav, "Sound Settings") } }
             item { RockRow(str(ctx, "LANG_PLAYBACK"), icon = G.Config) { nav.pop(); SettingsView.open(nav, "Playback Settings") } }
+            // SlopBox: Minimum Stars, straight to its choices (Playback Settings has it too).
+            item {
+                val min = RatingFilter.minStars(store)
+                RockRow("Minimum Stars", icon = G.Config, trailing = if (min == 0) "Off" else "★$min") {
+                    ShortcutView.setting = llm.slop.slopbox.SlopBoxSettings.MIN_STARS
+                    nav.pop(); nav.push(Screen.SettingsAt)
+                }
+            }
             // ratingitem_callback(): only with "Gather Runtime Data" on and the track in the database.
             if (store.int("gather runtime data") != 0 && playingId != null && llm.slop.slopbox.ui.db.TagDb.contains(playingId)) item {
                 RockRow(str(ctx, "LANG_MENU_SET_RATING"), icon = G.Cursor) { rating = true }

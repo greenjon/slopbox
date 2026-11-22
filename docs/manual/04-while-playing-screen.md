@@ -76,6 +76,8 @@ The **C** button (or a long-press) opens the WPS context menu:
   playing time
 - **Add to Playlist…**
 - **Sound Settings**, **Playback Settings**
+- **Minimum Stars:** pass over tracks rated below this (see
+  [Playback Settings](07-settings.md#playback-settings))
 - **Bookmarks:** create a bookmark, or list this playlist's bookmarks
 - **Set Song Rating** (with *Gather Runtime Data* on)
 - **Show Track Info:** every tag Rockbox's parser read, plus codec, bit
@@ -166,7 +168,8 @@ default (they're also in *Theme Settings › SlopBox*):
 
 - **Skip Rated Tracks**: whenever the player moves to another track (the
   track ends, you press ⏭, or you swipe), it passes over tracks that
-  already have a rating.
+  already have a rating. While it's on, *Playback Settings › Minimum
+  Stars* is ignored.
 - **Next Track After Rating**: a rating moves on to the next track.
 
 To hear a track in steps, set *Playback Settings › Skip Length*: the ⏮ and

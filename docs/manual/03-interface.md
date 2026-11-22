@@ -89,7 +89,7 @@ What happens when you tap other files:
 | File | What it does |
 |---|---|
 | Audio | Plays its folder from there |
-| `.m3u`, `.m3u8` | Plays the playlist from the top |
+| `.m3u`, `.m3u8` | Shows the playlist's tracks: *Play* plays it from the top, a track plays it from there |
 | `.cue` | Shows the cuesheet's tracks |
 | `.cfg` | Loads the settings in it |
 | `.bmark` | Lists its bookmarks |

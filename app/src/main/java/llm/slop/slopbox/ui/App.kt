@@ -67,6 +67,22 @@ object Queue {
         c.play()
     }
 
+    /** Play [items] from [start] without Autoload Bookmarks (Rockbox's playlist viewer). */
+    fun playFrom(c: MediaController, items: List<MediaItem>, start: Int) {
+        val item = items.getOrNull(start) ?: return
+        val ex = android.os.Bundle(item.requestMetadata.extras ?: android.os.Bundle())
+            .apply { putBoolean(llm.slop.slopbox.SlopPlayer.EXTRA_NO_AUTOLOAD, true) }
+        val marked = item.buildUpon().setRequestMetadata(item.requestMetadata.buildUpon().setExtras(ex).build()).build()
+        play(c, items.toMutableList().apply { set(start, marked) }, start)
+    }
+
+    /** Rockbox warn_on_pl_erase(): ask before replacing a changed playlist? */
+    fun warnOnErase(ctx: android.content.Context): Boolean {
+        val p = llm.slop.slopbox.SlopPlayer.current ?: return false
+        val store = llm.slop.slopbox.SettingsStore.get(ctx)
+        return p.playlistModified && store.int("warn when erasing dynamic playlist") != 0 && store.int("party mode") == 0
+    }
+
     fun insertNext(c: MediaController, items: List<MediaItem>) {
         if (c.mediaItemCount == 0) return play(c, items, 0)
         c.addMediaItems((c.currentMediaItemIndex + 1).coerceAtMost(c.mediaItemCount), items)

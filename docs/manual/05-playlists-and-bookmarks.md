@@ -11,8 +11,9 @@ starts, so playback resumes where it was.
 - **By playing a track** from the file browser or the database: SlopBox
   builds a playlist of everything listed there and starts at the track you
   tapped. This replaces the current playlist.
-- **By playing a playlist file** (`.m3u`, `.m3u8`), from the file browser or
-  the Playlist Catalogue.
+- **By playing a playlist file** (`.m3u`, `.m3u8`). Tapping one in the file
+  browser or the Playlist Catalogue shows its tracks; tap *Play* at the top
+  to play it from the start, or a track to play it from there.
 - **With *Playing Next…*** (below).
 
 If you've changed the current playlist (added, moved or removed tracks),
@@ -75,8 +76,12 @@ length and the time left).
 ### The Playlist Catalogue
 
 *Playlists* in the main menu lists the playlist files in the `Playlists`
-folder inside your music folder. Tap one to see its tracks; tap a track to
-play the playlist from there. Hold a playlist for its context menu
+folder inside your music folder, with any folders inside it first, so you
+can group playlists in subfolders (make them in the file browser). Tap a
+folder to open it and Back to leave it. Tap a playlist to see its tracks:
+*Play* at the top plays it from the start, and tapping a track plays it from
+there. This is the same view you get by tapping a playlist file in the file
+browser. Hold a playlist for its context menu
 (*Playing Next…*, *View*, *Rename*, *Delete* and the rest). The menu
 button in the catalogue's title bar has *Create Playlist* (every track in
 the music folder), *Save Current Playlist* and *View Current Playlist*.
@@ -94,8 +99,8 @@ as an `.m3u8` file. Queued tracks aren't saved.
 ### Adding to a saved playlist
 
 *Add to Playlist…* in a track's or folder's context menu adds it to a
-playlist in the catalogue, or to a new one, without touching what's
-playing.
+playlist in the catalogue (including its subfolders), or to a new one,
+without touching what's playing.
 
 ### Playlist files
 
@@ -123,7 +128,8 @@ back to an audiobook or a long mix later.
   menu, or tapping a `.bmark` file. Tap a bookmark to resume it and hold it
   to delete it.
 - *Load Last Bookmark* asks whether to resume the last bookmark when you
-  play a folder that has one.
+  play a folder or playlist that has one. Choosing *Play* in a playlist's
+  track list checks for a bookmark; tapping a track plays that track.
 
 SlopBox keeps its bookmarks in its own storage, in Rockbox's `.bmark`
 format, rather than beside the music.

@@ -300,7 +300,12 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
                         state.cursor[dir.id] = e.id
                         if (e.isDir) {
                             state.path += e
-                        } else if (!e.isTrack && !e.isPlaylist) {
+                        } else if (e.isPlaylist) {
+                            // SlopBox opens a playlist like a folder: its tracks, with Play at the top.
+                            // Rockbox ft_play_playlist() plays it at once (docs/DIFFERENCES.md).
+                            PlaylistsView.viewFile = e
+                            nav.push(Screen.Playlists)
+                        } else if (!e.isTrack) {
                             // Rockbox ft_enter() for the other known types; unknown ones do nothing.
                             viewing = e
                         } else {
@@ -308,22 +313,10 @@ fun BrowserScreen(controller: MediaController?, nav: Nav, state: BrowserState, p
                             // Rockbox: playing a file plays its folder, starting there.
                             val files = list.filter { it.isTrack }
                             val play = {
-                                if (e.isPlaylist) {
-                                    // Rockbox ft_play() on a playlist file: play it from the top.
-                                    scope.launch {
-                                        val items = llm.slop.slopbox.PlaylistFiles.load(ctx, tree, e.id, e.name)
-                                        if (items.isNotEmpty()) { Queue.play(c, items, 0); nav.toNowPlaying() }
-                                    }
-                                } else {
-                                    Queue.play(c, files.map { MusicTree.item(tree, it, dir) }, files.indexOf(e))
-                                    nav.toNowPlaying()
-                                }
-                                Unit
+                                Queue.play(c, files.map { MusicTree.item(tree, it, dir) }, files.indexOf(e))
+                                nav.toNowPlaying()
                             }
-                            val p = llm.slop.slopbox.SlopPlayer.current
-                            val store = llm.slop.slopbox.SettingsStore.get(ctx)
-                            if (p != null && p.playlistModified && store.int("warn when erasing dynamic playlist") != 0 &&
-                                store.int("party mode") == 0) confirmPlay = play else play()
+                            if (Queue.warnOnErase(ctx)) confirmPlay = play else play()
                         }
                     }
                 }

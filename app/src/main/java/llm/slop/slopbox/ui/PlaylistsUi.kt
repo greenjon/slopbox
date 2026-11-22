@@ -33,7 +33,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -60,30 +62,82 @@ object PlaylistsView {
     var addTitle by mutableStateOf("")
     /** A playlist file to open in the viewer when the Playlists screen opens (Rockbox view_playlist()). */
     var viewFile by mutableStateOf<Doc?>(null)
+    /** The catalogue subfolders entered, kept while you go to the playing screen and back. */
+    val catalogPath = mutableStateListOf<Doc>()
 }
 
 private fun str(ctx: android.content.Context, id: String) = SettingsStore.get(ctx).catalog.str(id)
 private fun toast(ctx: android.content.Context, text: String) = Toast.makeText(ctx, text, Toast.LENGTH_SHORT).show()
 
-/** Rockbox's Playlist Catalog: the playlists in the catalog folder. */
+/**
+ * One folder of the Playlist Catalogue: subfolders, then playlists. Back
+ * leaves a subfolder before it leaves the list. [path] holds the subfolders
+ * entered, so the caller keeps the place while it shows something else.
+ */
+@Composable
+fun CatalogList(
+    title: String,
+    path: SnapshotStateList<Doc>,
+    onBack: () -> Unit,
+    rev: Int = 0,
+    actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
+    empty: @Composable () -> Unit = { ListNote(str(LocalContext.current, "LANG_CATALOG_NO_PLAYLISTS")) },
+    onLongClick: ((dir: Doc, playlist: Doc) -> Unit)? = null,
+    onPick: (dir: Doc, playlist: Doc) -> Unit,
+) {
+    val ctx = LocalContext.current
+    val tree = MusicTree.root(ctx)
+    var root by remember { mutableStateOf<Doc?>(null) }
+    var list by remember { mutableStateOf<List<Doc>?>(null) }
+    val dir = path.lastOrNull() ?: root
+    LaunchedEffect(tree, path.lastOrNull()?.id, rev) {
+        list = null
+        if (tree == null) { list = emptyList(); return@LaunchedEffect }
+        val sub = path.lastOrNull()
+        val (r, l) = withContext(Dispatchers.IO) {
+            val r = PlaylistFiles.catalogDir(ctx, tree, create = false)?.let { Doc(it, PlaylistFiles.CATALOG_DIR, true) }
+            r to ((sub ?: r)?.let { PlaylistFiles.catalogFolder(ctx, tree, it.id) } ?: emptyList())
+        }
+        root = r; list = l
+        // The catalogue folder (or music folder) changed since: start at its top.
+        if (sub != null && (r == null || !sub.id.startsWith(r.id.trimEnd('/') + "/"))) path.clear()
+    }
+    BackHandler(enabled = path.isNotEmpty()) { path.removeAt(path.lastIndex) }
+    Column(Modifier.fillMaxSize()) {
+        TitleBar(path.lastOrNull()?.name ?: title,
+            onBack = { if (path.isNotEmpty()) path.removeAt(path.lastIndex) else onBack() }, actions = actions)
+        val l = list
+        when {
+            tree == null -> ListNote("Choose the music folder first.")
+            l == null -> ListNote("Loading…")
+            l.isEmpty() -> empty()
+            else -> RockList(Modifier.fillMaxSize(), label = { i -> l.getOrNull(i)?.let { initial(it.name) } }) {
+                items(l) { d ->
+                    if (d.isDir) RockRow(d.name, icon = G.TangoFolder) { path.add(d) }
+                    else RockRow(d.name.substringBeforeLast('.'), icon = G.ListC,
+                        onLongClick = onLongClick?.let { f -> { f(dir!!, d) } }) { onPick(dir!!, d) }
+                }
+            }
+        }
+    }
+}
+
+/** Rockbox's Playlist Catalog: the playlists in the catalog folder, and (SlopBox) its subfolders. */
 @Composable
 fun CatalogScreen(controller: MediaController?, nav: Nav) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val tree = MusicTree.root(ctx)
     var rev by remember { mutableIntStateOf(0) }
-    var list by remember { mutableStateOf<List<Doc>?>(null) }
+    val path = PlaylistsView.catalogPath
     var options by remember { mutableStateOf(false) }
-    // Opened from a file's "View" (Rockbox view_playlist()): straight to that playlist.
+    // Opened from a file's "View" or a tap in Files: straight to that playlist.
     val external = remember { PlaylistsView.viewFile.also { PlaylistsView.viewFile = null } }
     var viewing by remember { mutableStateOf(external) }
-    var menuFor by remember { mutableStateOf<Doc?>(null) }
+    var menuFor by remember { mutableStateOf<Pair<Doc, Doc>?>(null) }
     var playingNextFor by remember { mutableStateOf<Doc?>(null) }
     var saving by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
-    LaunchedEffect(tree, rev) {
-        list = if (tree == null) emptyList() else withContext(Dispatchers.IO) { PlaylistFiles.catalog(ctx, tree).map { it.first } }
-    }
     BackHandler(enabled = options || viewing != null || menuFor != null || playingNextFor != null || saving || creating) {
         if (external != null && viewing == external) nav.pop()
         options = false; viewing = null; menuFor = null; playingNextFor = null; saving = false; creating = false
@@ -105,9 +159,8 @@ fun CatalogScreen(controller: MediaController?, nav: Nav) {
         }
         return
     }
-    menuFor?.let { doc ->
-        val dirId = PlaylistFiles.catalogDir(ctx, tree!!, create = false) ?: doc.id.substringBeforeLast('/')
-        TreeContextMenu(tree, Doc(dirId, PlaylistFiles.CATALOG_DIR, true), doc, TreeKind.CATALOG, nav,
+    menuFor?.let { (dir, doc) ->
+        TreeContextMenu(tree!!, dir, doc, TreeKind.CATALOG, nav,
             onClose = { changed -> menuFor = null; if (changed) rev++ },
             onView = { menuFor = null; viewing = doc },
             onPlayingNext = { menuFor = null; playingNextFor = doc })
@@ -127,33 +180,27 @@ fun CatalogScreen(controller: MediaController?, nav: Nav) {
                 val st = SettingsStore.get(ctx)
                 st.catalog.byCfg["playlist catalog directory"]?.let { st.setText(it, it.defaultText ?: "") }
                 toast(ctx, str(ctx, "LANG_RESET_DONE_CLEAR"))
-                options = false; rev++
+                options = false; path.clear(); rev++
             }
         }
         return
     }
-    Column(Modifier.fillMaxSize()) {
-        TitleBar(str(ctx, "LANG_PLAYLISTS"), onBack = { nav.pop() }) { BarButton(G.ListC) { options = true } }
-        when {
-            tree == null -> ListNote("Choose the music folder first.")
-            list == null -> ListNote("Loading…")
-            list!!.isEmpty() -> {
-                ListNote(str(ctx, "LANG_CATALOG_NO_PLAYLISTS"))
-                if (!PlaylistFiles.writable(ctx, tree)) ListNote("To save playlists, choose the music folder again (Settings › General Settings › Database › Select directories to scan).")
-            }
-            else -> RockList(Modifier.fillMaxSize(), label = { i -> list!!.getOrNull(i)?.let { initial(it.name) } }) {
-                items(list!!) { d ->
-                    RockRow(d.name.substringBeforeLast('.'), icon = G.ListC, onLongClick = { menuFor = d }) { viewing = d }
-                }
-            }
-        }
-    }
+    CatalogList(str(ctx, "LANG_PLAYLISTS"), path, onBack = { nav.pop() }, rev = rev,
+        actions = { BarButton(G.ListC) { options = true } },
+        empty = {
+            ListNote(str(ctx, "LANG_CATALOG_NO_PLAYLISTS"))
+            if (tree != null && !PlaylistFiles.writable(ctx, tree)) ListNote("To save playlists, choose the music folder again (Settings › General Settings › Database › Select directories to scan).")
+        },
+        onLongClick = { dir, d -> menuFor = dir to d },
+    ) { _, d -> viewing = d }
 }
 
 /**
  * Rockbox playlist_viewer_ex() on a playlist file: its tracks; picking one
- * plays the playlist from there. The track menu edits this playlist (not the
- * one playing), and leaving after a change asks "Save Changes?".
+ * plays the playlist from there (no bookmark autoload). The track menu edits
+ * this playlist (not the one playing), and leaving after a change asks "Save
+ * Changes?". SlopBox adds a Play row that plays it all from the top, as
+ * Rockbox's file browser does when you pick a playlist file.
  */
 @Composable
 private fun PlaylistFileScreen(controller: MediaController?, nav: Nav, tree: Uri, doc: Doc, onBack: () -> Unit) {
@@ -164,6 +211,7 @@ private fun PlaylistFileScreen(controller: MediaController?, nav: Nav, tree: Uri
     var moving by remember { mutableStateOf<Int?>(null) }
     var askSave by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf(false) }
+    var confirmPlay by remember { mutableStateOf<(() -> Unit)?>(null) }
     LaunchedEffect(doc.id) { items = PlaylistFiles.load(ctx, tree, doc.id, doc.name) }
     fun paths() = items.orEmpty().mapNotNull { it.requestMetadata.mediaUri }.map { PlaybackMemory.pathOf(it) }
     fun saveTo(name: String): Boolean {
@@ -173,8 +221,18 @@ private fun PlaylistFileScreen(controller: MediaController?, nav: Nav, tree: Uri
         return target != null && PlaylistFiles.write(ctx, target.first, target.second, paths())
     }
     fun leave() { if (modified) askSave = true else onBack() }
-    BackHandler(enabled = menuFor == null && !naming && !askSave) { if (moving != null) moving = null else leave() }
+    // Rockbox warn_on_pl_erase() before the playlist replaces a changed one.
+    fun start(play: (MediaController) -> Unit) {
+        val run = { controller?.let(play); nav.toNowPlaying() }
+        if (Queue.warnOnErase(ctx)) confirmPlay = run else run()
+    }
+    BackHandler(enabled = menuFor == null && !naming && !askSave && confirmPlay == null) { if (moving != null) moving = null else leave() }
     BackHandler(enabled = menuFor != null) { menuFor = null }
+
+    confirmPlay?.let { action ->
+        YesNo(str(ctx, "LANG_WARN_ERASEDYNPLAYLIST_PROMPT")) { yes -> confirmPlay = null; if (yes) action() }
+        return
+    }
 
     if (askSave) {
         YesNo(str(ctx, "LANG_SAVE_CHANGES")) { yes ->
@@ -212,6 +270,12 @@ private fun PlaylistFileScreen(controller: MediaController?, nav: Nav, tree: Uri
             onBack = { if (moving != null) moving = null else leave() })
         val l = items
         if (l == null) ListNote("Loading…") else RockList(Modifier.fillMaxSize()) {
+            // Play it all, checking for a bookmark unless it has unsaved edits.
+            if (l.isNotEmpty() && moving == null) item {
+                RockRow(str(ctx, "LANG_PLAY"), icon = G.Cursor) {
+                    start { c -> if (modified) Queue.playFrom(c, l, 0) else Queue.play(c, l, 0) }
+                }
+            }
             itemsIndexed(l) { i, item ->
                 RockRow(trackLabel(ctx, item, i), icon = G.TangoNote, selected = i == moving,
                     onLongClick = { menuFor = i }) {
@@ -221,8 +285,7 @@ private fun PlaylistFileScreen(controller: MediaController?, nav: Nav, tree: Uri
                         modified = true
                         moving = null
                     } else {
-                        controller?.let { Queue.play(it, l, i) }
-                        nav.toNowPlaying()
+                        start { c -> Queue.playFrom(c, l, i) }
                     }
                 }
             }
@@ -325,6 +388,7 @@ fun AddToPlaylistScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     val tree = MusicTree.root(ctx)
     var picking by remember { mutableStateOf(false) }
+    val pickPath = remember { mutableStateListOf<Doc>() }
     var naming by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf(PlaylistsView.addTitle) }
     BackHandler(enabled = picking || naming) { picking = false; naming = false }
@@ -337,17 +401,8 @@ fun AddToPlaylistScreen(nav: Nav) {
     Column(Modifier.fillMaxSize()) {
         when {
             tree == null -> { TitleBar(str(ctx, "LANG_ADD_TO_PL"), onBack = { nav.pop() }); ListNote("Choose the music folder first.") }
-            picking -> {
-                TitleBar(str(ctx, "LANG_ADD_TO_EXISTING_PL"), onBack = { picking = false })
-                val list = remember { PlaylistFiles.catalog(ctx, tree).map { it.first } }
-                if (list.isEmpty()) ListNote(str(ctx, "LANG_CATALOG_NO_PLAYLISTS"))
-                RockList(Modifier.fillMaxSize()) {
-                    items(list) { d ->
-                        RockRow(d.name.substringBeforeLast('.'), icon = G.ListC) {
-                            scope.launch { done(PlaylistFiles.append(ctx, tree, d.id, d.name, paths)) }
-                        }
-                    }
-                }
+            picking -> CatalogList(str(ctx, "LANG_ADD_TO_EXISTING_PL"), pickPath, onBack = { picking = false }) { _, d ->
+                scope.launch { done(PlaylistFiles.append(ctx, tree, d.id, d.name, paths)) }
             }
             naming -> {
                 TitleBar(str(ctx, "LANG_CATALOG_ADD_TO_NEW"), onBack = { naming = false })

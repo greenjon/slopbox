@@ -838,7 +838,10 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         entries.clear()
         lastInsertPos = -1
         playlistModified = false
-        capped(mediaItems, 0).forEach { entries += Entry(nextUid++, it) }
+        // Picking a track in a playlist file's viewer plays that track: no
+        // bookmark autoload, as in Rockbox's playlist viewer.
+        val noAutoload = mediaItems.any { it.requestMetadata.extras?.containsKey(EXTRA_NO_AUTOLOAD) == true }
+        capped(mediaItems, 0).forEach { entries += Entry(nextUid++, withoutNoAutoload(it)) }
         index = if (startIndex == C.INDEX_UNSET) 0 else startIndex.coerceIn(0, maxOf(0, entries.size - 1))
         heldPositionMs = if (startPositionMs == C.TIME_UNSET) 0 else startPositionMs
         shuffled = false
@@ -851,9 +854,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         }
         if (playbackState != Player.STATE_IDLE) {
             playbackState = if (entries.isEmpty()) Player.STATE_ENDED else Player.STATE_READY
-            if (playbackState == Player.STATE_READY && !autoloadBookmark()) startCurrent(heldPositionMs)
+            if (playbackState == Player.STATE_READY && (noAutoload || !autoloadBookmark())) startCurrent(heldPositionMs)
         } else {
-            pendingAutoload = true
+            pendingAutoload = !noAutoload
         }
         updateHolds()
         savePlaylist()
@@ -1304,6 +1307,13 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
      * Rockbox "Max Playlist Size": what fits after [already] tracks; when
      * something doesn't, "Playlist Buffer Full".
      */
+    private fun withoutNoAutoload(item: MediaItem): MediaItem {
+        val ex = item.requestMetadata.extras ?: return item
+        if (!ex.containsKey(EXTRA_NO_AUTOLOAD)) return item
+        val clean = android.os.Bundle(ex).apply { remove(EXTRA_NO_AUTOLOAD) }
+        return item.buildUpon().setRequestMetadata(item.requestMetadata.buildUpon().setExtras(clean).build()).build()
+    }
+
     private fun capped(items: List<MediaItem>, already: Int): List<MediaItem> {
         val room = (setting("max files in playlist") - already).coerceAtLeast(0)
         if (items.size <= room) return items
@@ -1468,6 +1478,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         const val PLAYLIST_INSERT_FIRST = -4
         const val PLAYLIST_INSERT_SHUFFLED = -5
         const val PLAYLIST_INSERT_LAST_SHUFFLED = -7
+
+        /** Set on an item of a new playlist to start it without Autoload Bookmarks. */
+        const val EXTRA_NO_AUTOLOAD = "slopbox.no_autoload"
 
         /** The player of the running playback service (same process, main thread). */
         @Volatile var current: SlopPlayer? = null

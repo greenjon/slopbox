@@ -100,8 +100,9 @@ Anything new goes here in the same change that introduces it.
   50 ms against Rockbox's 200 ms window.
 - **Party Mode.** Rockbox's playing screen also refuses Play while paused.
   SlopBox lets a paused player resume, and locks pause, stop, seek and skip
-  only while music plays. Playing from the database queues tracks last;
-  Rockbox refuses with a "Party Mode" message.
+  only while music plays. Playing from the database or a playlist file
+  queues the tracks last; Rockbox refuses with a "Party Mode" message (and
+  does nothing for a track picked in a playlist file's viewer).
 - **Single Mode "Playlist".** Only an automatic folder change counts as a new
   playlist.
 - **Auto-Change Directory.** Android grants only the chosen music folder, so
@@ -185,6 +186,27 @@ Anything new goes here in the same change that introduces it.
   tap where it goes" rather than Rockbox's move-cursor mode. Shuffling a
   playlist file in the viewer uses Android's random order rather than
   Rockbox's seeded one.
+- **Opening a playlist file.** Rockbox's file browser plays a playlist file
+  as soon as you pick it, while its Playlist Catalogue opens the same file in
+  the playlist viewer. SlopBox opens it in the viewer from both places, with
+  a Play row at the top that plays it from the start (checking for a
+  bookmark, as Rockbox's file browser does, unless the list has unsaved
+  edits). Why: a playlist is like a folder, and tapping a folder shows its
+  contents, so a playlist file now does the same, and it behaves the same
+  wherever you open it. Rockbox's split looks like two code paths that grew
+  apart rather than a design choice. Playing Next › Play, and a file
+  shortcut, still play it straight away.
+- **Catalogue subfolders.** Rockbox's catalogue lists only the playlists in
+  the catalog folder itself; its filter hides folders. SlopBox lists
+  subfolders too (folders first, by name), and you can open them in the
+  catalogue, Add to Existing Playlist and the Track Rater's Play Playlist.
+  Why: grouping many playlists into folders is useful, and showing folders
+  doesn't stop the list from being playlists only. Folders in the catalogue
+  have no context menu; make, rename or delete them in the file browser.
+- **Catalogue and bookmarks.** Rockbox checks for a bookmark when you pick a
+  playlist in the catalogue, before the viewer opens, and the next visit
+  reopens the playlist you last played from. SlopBox opens the viewer
+  without checking (Play checks) and always starts at the catalogue list.
 - **Catalog folder from Set As.** "Set As... › Playlist Directory" works only
   for a folder inside the music folder.
 - **Create Playlist.** It collects every track in the music folder, not from

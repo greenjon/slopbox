@@ -132,25 +132,43 @@ object PlaylistFiles {
         }.getOrNull()?.let { DocumentsContract.getDocumentId(it) }
     }
 
-    /** Playlists in the catalog, sorted per "Sort Playlists" (alphabetical / oldest / newest). */
+    /** Playlists in the catalog folder itself, sorted per "Sort Playlists" (alphabetical / oldest / newest). */
     fun catalog(ctx: Context, tree: Uri): List<Pair<Doc, Long>> {
         val dir = catalogDir(ctx, tree, create = false) ?: return emptyList()
+        return entries(ctx, tree, dir).second
+    }
+
+    /**
+     * One folder of the catalog: its subfolders by name, then its playlists
+     * per "Sort Playlists". Rockbox lists only the top folder's playlists;
+     * SlopBox lets you file playlists in subfolders (docs/DIFFERENCES.md).
+     */
+    fun catalogFolder(ctx: Context, tree: Uri, dirId: String): List<Doc> {
+        val (dirs, files) = entries(ctx, tree, dirId)
+        return dirs + files.map { it.first }
+    }
+
+    private fun entries(ctx: Context, tree: Uri, dirId: String): Pair<List<Doc>, List<Pair<Doc, Long>>> {
+        val dirs = mutableListOf<Doc>()
         val out = mutableListOf<Pair<Doc, Long>>()
         runCatching {
-            ctx.contentResolver.query(DocumentsContract.buildChildDocumentsUriUsingTree(tree, dir), arrayOf(
+            ctx.contentResolver.query(DocumentsContract.buildChildDocumentsUriUsingTree(tree, dirId), arrayOf(
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)?.use { c ->
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED, DocumentsContract.Document.COLUMN_MIME_TYPE), null, null, null)?.use { c ->
                 while (c.moveToNext()) {
                     val n = c.getString(1) ?: continue
-                    if (isPlaylist(n)) out += Doc(c.getString(0), n, false) to c.getLong(2)
+                    if (n.startsWith(".")) continue
+                    if (c.getString(3) == DocumentsContract.Document.MIME_TYPE_DIR) dirs += Doc(c.getString(0), n, true)
+                    else if (isPlaylist(n)) out += Doc(c.getString(0), n, false) to c.getLong(2)
                 }
             }
         }
-        return when (SettingsStore.get(ctx).int("sort playlists")) {
+        val files = when (SettingsStore.get(ctx).int("sort playlists")) {
             1 -> out.sortedBy { it.second }
             2 -> out.sortedByDescending { it.second }
             else -> out.sortedBy { it.first.name.lowercase() }
         }
+        return dirs.sortedBy { it.name.lowercase() } to files
     }
 
     /** A new playlist file in the catalog (Rockbox adds .m3u8). Null if it can't. */

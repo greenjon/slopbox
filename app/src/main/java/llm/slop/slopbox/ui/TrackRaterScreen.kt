@@ -133,6 +133,7 @@ fun TrackRaterScreen(controller: MediaController?, nav: Nav) {
     val prefs = remember { RaterPrefs.of(ctx) }
     var rev by remember { mutableIntStateOf(0) }           // prefs changed
     var menu by remember { mutableStateOf<String?>(null) } // null, "menu", "playlists", "order", "jump"
+    val playlistPath = remember { androidx.compose.runtime.mutableStateListOf<Doc>() }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
     val undo = remember { ArrayDeque<Pair<String, Int>>() }
@@ -292,24 +293,8 @@ fun TrackRaterScreen(controller: MediaController?, nav: Nav) {
             return
         }
         "playlists" -> {
-            var list by remember { mutableStateOf<List<Doc>?>(null) }
-            LaunchedEffect(Unit) {
-                list = MusicTree.root(ctx)?.let { t -> withContext(Dispatchers.IO) { PlaylistFiles.catalog(ctx, t).map { it.first } } }
-                    ?: emptyList()
-            }
-            Column(Modifier.fillMaxSize()) {
-                TitleBar(str(ctx, "LANG_PLAYLISTS"), onBack = { menu = "menu" })
-                val l = list
-                when {
-                    l == null -> ListNote(str(ctx, "LANG_WAIT"))
-                    l.isEmpty() -> ListNote(str(ctx, "LANG_NO_FILES"))
-                    else -> RockList(Modifier.fillMaxSize()) {
-                        items(l) { d ->
-                            RockRow(d.name.substringBeforeLast('.'), icon = G.ListQ) { menu = null; prefs.save(); playPlaylist(d) }
-                        }
-                    }
-                }
-            }
+            CatalogList(str(ctx, "LANG_PLAYLISTS"), playlistPath, onBack = { menu = "menu" },
+                empty = { ListNote(str(ctx, "LANG_NO_FILES")) }) { _, d -> menu = null; prefs.save(); playPlaylist(d) }
             return
         }
         "order", "jump" -> {

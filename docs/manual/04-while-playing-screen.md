@@ -34,8 +34,8 @@ Other layouts are described [below](#layouts).
 
 Rewind and fast forward follow Rockbox's *FF/RW Min Step* and *FF/RW Accel*
 settings (*Playback Settings › Fast-Forward/Rewind*). With the phone's
-volume keys, the volume bar appears too. SlopBox's *Volume* setting is
-Rockbox's software volume, applied on top of the phone's media volume.
+volume keys, the volume bar appears too. SlopBox has one volume, the
+phone's media volume, which the *Volume* setting also changes.
 
 ## Touch and gestures
 

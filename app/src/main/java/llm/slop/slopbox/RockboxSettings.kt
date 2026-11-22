@@ -16,7 +16,11 @@
  */
 package llm.slop.slopbox
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
@@ -137,11 +141,31 @@ class RbCatalog(
             val json = JSONObject(context.assets.open("rockbox_settings.json").bufferedReader().readText())
             val lang = json.getJSONObject("lang").let { o -> o.keys().asSequence().associateWith { o.getString(it) } }
             val rockbox = json.getJSONArray("settings").objects().map { parseSetting(it) }
+                .map { if (it.cfg == "volume") mediaVolume(context, it) else it }
             val extra = SlopBoxSettings.ALL.mapIndexed { i, x -> x.setting(rockbox.size + i) }
             val settings = rockbox + extra
-            val menu = SlopBoxSettings.addMenu(parseMenu(json.getJSONObject("menu"), settings, lang), lang, rockbox.size)
+            val limit = rockbox.firstOrNull { it.cfg == "volume limit" }?.index ?: -1
+            val menu = SlopBoxSettings.addMenu(
+                withoutSetting(parseMenu(json.getJSONObject("menu"), settings, lang), limit), lang, rockbox.size)
             return RbCatalog(settings, menu, lang, json.optString("rockbox_revision"))
         }
+
+        /**
+         * SlopBox: Volume is Android's media volume, in its own steps (as in
+         * Rockbox's Android port, RockboxPCM.java), so there is one volume.
+         */
+        private fun mediaVolume(context: Context, s: RbSetting): RbSetting {
+            val max = context.getSystemService(AudioManager::class.java)
+                .getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+            return RbSetting(s.index, s.cfg, s.flags, s.title, "int", max / 2, null,
+                (0..max).map { it to "$it / $max" }, null, null)
+        }
+
+        /** SlopBox drops Maximum Volume Limit: Android's media volume can't be capped. */
+        private fun withoutSetting(m: RbMenuItem, setting: Int): RbMenuItem =
+            if (!m.isMenu) m
+            else RbMenuItem(m.type, m.text, m.setting, m.function, m.param,
+                m.items.filter { it.setting != setting || !it.isSetting }.map { withoutSetting(it, setting) }, m.textFn)
 
         private fun text(v: Any?): String? = when (v) {
             is JSONObject -> v.optString("text")
@@ -259,19 +283,34 @@ class SettingsStore private constructor(private val context: Context, val catalo
     private val file = File(context.filesDir, "config.cfg")
     private val listeners = mutableListOf<() -> Unit>()
 
+    private val audio = context.getSystemService(AudioManager::class.java)
+
     init {
         if (file.exists()) loadCfg(file.readText(), save = false)
+        // Volume is the media volume: show changes from the volume keys too.
+        context.registerReceiver(object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                if (i.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1) == AudioManager.STREAM_MUSIC)
+                    listeners.toList().forEach { it() }
+            }
+        }, IntentFilter("android.media.VOLUME_CHANGED_ACTION"), Context.RECEIVER_NOT_EXPORTED)
     }
 
     fun addListener(l: () -> Unit) { listeners += l }
     fun removeListener(l: () -> Unit) { listeners -= l }
 
-    fun int(s: RbSetting): Int = ints[s.cfg] ?: s.defaultInt
+    fun int(s: RbSetting): Int =
+        if (s.cfg == "volume") audio.getStreamVolume(AudioManager.STREAM_MUSIC) else ints[s.cfg] ?: s.defaultInt
     fun text(s: RbSetting): String = texts[s.cfg] ?: s.defaultText ?: ""
     fun int(cfg: String): Int = catalog.byCfg[cfg]?.let { int(it) } ?: 0
 
     fun set(s: RbSetting, value: Int) {
         val cfg = s.cfg ?: return
+        if (cfg == "volume") {
+            audio.setStreamVolume(AudioManager.STREAM_MUSIC, value, 0)
+            listeners.toList().forEach { it() }
+            return
+        }
         if (value == s.defaultInt) ints.remove(cfg) else ints[cfg] = value
         applyToEngine(s)
         changed()
@@ -286,6 +325,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
 
     /** Rockbox reset_setting(): back to the default. */
     fun reset(s: RbSetting) {
+        if (s.cfg == "volume") return  // the media volume has no default
         if (s.isText) setText(s, s.defaultText ?: "") else set(s, s.defaultInt)
     }
 
@@ -321,7 +361,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
         sb.append("# .cfg file created by SlopBox (settings from Rockbox ${catalog.rockboxRevision})\r\n\r\n")
         for (s in catalog.settings) {
             val cfg = s.cfg ?: continue
-            if (s.has(RbFlags.F_DEPRECATED)) continue
+            if (s.has(RbFlags.F_DEPRECATED) || cfg in MEDIA_VOLUME) continue
             when (mode) {
                 SAVE_CHANGED -> if (cfg !in ints && cfg !in texts) continue
                 SAVE_SOUND -> if (!s.has(RbFlags.F_SOUNDSETTING)) continue
@@ -345,6 +385,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             val name = line.substring(0, colon).trim()
             val value = line.substring(colon + 1).trim()
             val s = catalog.byCfg[name] ?: continue
+            if (name in MEDIA_VOLUME) continue
             if (s.isText) {
                 if (value == s.defaultText) texts.remove(name) else texts[name] = value
             } else {
@@ -392,6 +433,8 @@ class SettingsStore private constructor(private val context: Context, val catalo
         val cfg = s.cfg ?: return
         if (cfg == "default codepage") { Engine.prepare(context); Engine.setCodepage(int(s)); return }
         ENGINE_IDS[cfg]?.let { id ->
+            // Rockbox's software volume stays at 0 dB; Android's media volume is the volume.
+            if (cfg in MEDIA_VOLUME) { Engine.setSetting(id, 0); return }
             val v = if (s.isCustom) text(s).trim().toIntOrNull() ?: 0 else int(s)
             Engine.setSetting(id, v)
             return
@@ -419,6 +462,9 @@ class SettingsStore private constructor(private val context: Context, val catalo
         )
         private val OLD_EQ_NAMES = listOf("eq low shelf filter") +
             (1..8).map { "eq peak filter $it" } + "eq high shelf filter"
+
+        /** Rockbox settings that Android's media volume replaces: not saved, loaded or sent to the engine. */
+        val MEDIA_VOLUME = setOf("volume", "volume limit")
 
         /** .cfg name -> engine/sb_settings.h id. Keep in step with enum sb_setting_id. */
         val ENGINE_IDS = listOf(

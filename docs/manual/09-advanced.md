@@ -31,7 +31,7 @@ per line, written `name: value`, with lines starting with `#` ignored.
 
 ```
 # .cfg file created by SlopBox (settings from Rockbox 3a299f5dea)
-volume: -6
+bass: 2
 crossfeed: meier
 eq enabled: on
 statusbar: bottom
@@ -39,6 +39,7 @@ foreground color: cccccc
 selector type: bar (gradient)
 ```
 
+- **Volume** isn't saved or loaded: it's the phone's media volume.
 - **Names and values** are Rockbox's, so a file from a Rockbox player loads
   in SlopBox and the other way round. Settings one side doesn't know are
   skipped.

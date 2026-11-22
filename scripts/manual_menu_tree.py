@@ -38,6 +38,7 @@ def walk(m, depth):
     for it in m.get("items", []):
         t = text(it)
         s = settings[it["setting"]] if it.get("setting", -1) >= 0 and it["setting"] < len(settings) else None
+        if s and s.get("cfg") == "volume limit": continue  # SlopBox drops it (RbCatalog.withoutSetting)
         if s and not t: t = (s.get("title") or {}).get("text") if isinstance(s.get("title"), dict) else s.get("title")
         if not t and s: t = s["cfg"]
         if not t and it.get("text_fn") == "wps_context_menu_get_name":

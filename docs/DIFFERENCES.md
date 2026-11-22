@@ -21,9 +21,15 @@ Anything new goes here in the same change that introduces it.
   `warble` configuration fixes) and Android resamples to the device rate.
   Rockbox's hosted builds also use a fixed rate, but hardware targets can
   differ.
-- **Volume.** On a player, Rockbox's Volume setting is the device volume. In
-  SlopBox it is Rockbox's software volume (an attenuation), applied on top of
-  Android's media volume.
+- **Volume.** Volume is Android's media volume, as in Rockbox's own Android
+  port: the Volume setting, the Quick Screen item, the volume keys, the
+  volume bar and the right-edge drag all move it, in Android's steps
+  (shown as "7 / 15") rather than in dB. Rockbox's software volume stays at
+  0 dB. Volume isn't written to or read from `.cfg` files, and it has no
+  Reset Setting (Reset Settings leaves it alone).
+- **Maximum Volume Limit.** Dropped: Android's media volume can't be capped,
+  since the phone's volume keys go past any limit. It isn't in Sound
+  Settings and isn't saved or loaded.
 - **Track skip beep.** Rockbox mixes the beep on its own mixer channel,
   scaled by master volume, and it can sound while playback is paused. SlopBox
   mixes it into the output after volume and balance, and it isn't heard while
@@ -54,7 +60,7 @@ Anything new goes here in the same change that introduces it.
   step with −/+ (−−/++ for big steps), which repeat while held. Rockbox's
   touchscreen keymap for this screen is a 3x3 grid instead.
 - **Not editable yet.** Custom-type settings other than the EQ
-  bands, Maximum Volume Limit, the While Playing Screen items and the
+  bands, the While Playing Screen items and the
   Quick Screen items (e.g. touchscreen calibration).
 - **Automatic Resume custom folders.** "In custom directories only" opens a
   port of Rockbox's db_folder_select plugin over the music folder, and the
@@ -451,8 +457,7 @@ Anything new goes here in the same change that introduces it.
 - **Quick Screen.** It shows Rockbox's four configurable items and uses
   Rockbox's touchscreen rule (a tap in the top, left, right or bottom third
   changes that item; anywhere else leaves), drawn as text rather than with
-  Rockbox's arrows. Volume as an item changes the Volume setting, not
-  Android's media volume.
+  Rockbox's arrows.
 - **Setting context menu.** A long press on a setting gives Rockbox's menu.
   A long press on a submenu just opens it.
 - **Shortcuts.** `shortcuts.txt` is kept in SlopBox's own storage, not

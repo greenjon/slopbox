@@ -22,11 +22,8 @@ does on a phone. Rockbox's manual has more detail on the sound processing.
 Everything here runs through Rockbox's DSP before the sound reaches
 Android, so it applies to headphones, speaker and Bluetooth alike.
 
-- **Volume** (−80 to 0 dB): Rockbox's volume, an attenuation applied on
-  top of the phone's media volume. 0 dB is full volume. Use the phone's
-  volume keys for everyday changes and this to lower SlopBox relative to
-  other apps.
-- **Maximum Volume Limit**: caps *Volume*.
+- **Volume**: the phone's media volume, in its own steps. It's the same
+  volume the volume keys, the volume bar and the right-edge drag change.
 - **Bass**, **Treble** (−24 to +24 dB): tone controls. 0 dB is flat.
 - **Balance**: left/right balance.
 - **Channel Configuration**: Stereo, Mono, Custom (uses *Stereo Width*),

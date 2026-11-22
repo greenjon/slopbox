@@ -196,13 +196,6 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
     fun openSetting(item: RbMenuItem) {
         val s = cat.settings.getOrNull(item.setting) ?: return
         val note = if (store.isLive(s)) null else "Not used by SlopBox yet; saved with your settings."
-        if (s.cfg == "volume limit") {
-            // Rockbox shows the volume range for the limit.
-            val vol = cat.byCfg["volume"]!!
-            stack += Page.Value(item.text, vol.labels,
-                { store.text(s).trim().toIntOrNull() ?: 0 }, { store.setText(s, it.toString()) }, note)
-            return
-        }
         if (s.labels.isEmpty()) {
             message = "${item.text}: this kind of setting isn't editable in SlopBox yet."
             return
@@ -250,7 +243,9 @@ fun SettingsTreeScreen(nav: Nav, pickRoot: () -> Unit, startAt: String? = null) 
         if (st == null) { settingMenu = null; return }
         Column(Modifier.fillMaxSize()) {
             TitleBar(cat.str("LANG_ONPLAY_MENU_TITLE"), onBack = { settingMenu = null })
-            RockRow(cat.str("LANG_RESET_SETTING"), icon = G.Cursor) { store.reset(st); settingMenu = null }
+            // SlopBox: Volume is the media volume, with no default to go back to.
+            if (st.cfg != "volume")
+                RockRow(cat.str("LANG_RESET_SETTING"), icon = G.Cursor) { store.reset(st); settingMenu = null }
             if (st.quickscreenable) {
                 for ((lang, cfg) in listOf("LANG_TOP_QS_ITEM" to "qs top", "LANG_LEFT_QS_ITEM" to "qs left",
                     "LANG_BOTTOM_QS_ITEM" to "qs bottom", "LANG_RIGHT_QS_ITEM" to "qs right")) {

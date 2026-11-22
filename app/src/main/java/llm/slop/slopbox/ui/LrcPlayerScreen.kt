@@ -290,9 +290,9 @@ fun LrcPlayerScreen(controller: MediaController?, nav: Nav) {
                     1 to 0 -> c?.let { if (it.currentPosition < 3000) it.seekToPrevious() else it.seekTo(0) }
                     1 to 2 -> c?.seekToNext()
                     0 to 1 -> if (!prefs.autoscroll) scroll = (scroll + 3000).coerceAtMost(length)
-                        else store.catalog.byCfg["volume"]?.let { store.set(it, (store.int(it) + 1).coerceAtMost(0)) }
+                        else store.catalog.byCfg["volume"]?.let { store.set(it, (store.int(it) + 1).coerceAtMost(it.labels.last().first)) }
                     2 to 1 -> if (!prefs.autoscroll) scroll = (scroll - 3000).coerceAtLeast(0)
-                        else store.catalog.byCfg["volume"]?.let { store.set(it, (store.int(it) - 1).coerceAtLeast(-80)) }
+                        else store.catalog.byCfg["volume"]?.let { store.set(it, (store.int(it) - 1).coerceAtLeast(0)) }
                     0 to 0 -> menu = true
                     0 to 2 -> { prefs.save(); nav.pop() }
                 }

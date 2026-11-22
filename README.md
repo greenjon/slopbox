@@ -45,6 +45,7 @@ Tested on a Unihertz Jelly Star (Android 13, arm64) with a library of about
 5,600 tracks on an SD card. Plans for 1.2 (voice, languages, more music
 plugins, faster scans) are in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+The [SlopBox Manual](docs/manual/README.md) explains how to use it.
 Known differences from Rockbox are listed in [docs/DIFFERENCES.md](docs/DIFFERENCES.md).
 
 ## Settings, straight from Rockbox

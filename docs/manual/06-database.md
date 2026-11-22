@@ -58,8 +58,8 @@ database keeps Rockbox's statistics for each track:
 
 These fill the *Playback History* and *User Rating* menus. Set a track's
 rating with **Set Song Rating** in its context menu (WPS or browser), or
-quickly, a star at a time, with the [Track Rater](08-plugins.md#track-rater-track_rater)
-plugin.
+quickly, a star at a time, with the [Rater layout](04-while-playing-screen.md#the-rater-layout)
+of the While Playing Screen.
 
 If a file moves or is renamed, *Update Now* finds it again by its file name
 and tags and keeps its statistics, as Rockbox does.
@@ -73,7 +73,7 @@ Modifications* reads such a file back.
 
 Use them to carry ratings and play counts between SlopBox and a Rockbox
 player (the paths match when the music sits at the same path on both, such
-as `/Music/...`), or for your own scripts to read. The Track Rater writes
+as `/Music/...`), or for your own scripts to read. The Rater layout writes
 this file after every rating.
 
 ## Your own menus

@@ -23,3 +23,5 @@
 - More music plugins: metronome, VU meter / oscilloscope / FFT, pitch
   detector, cue_playlist, vbrfix.
 - Home-screen widget and Quick Settings tile (docs/ui-plan.md step 16).
+- Sort the playing queue by artist, album, year or title, keeping the
+  current track (the old Track Rater's Order, as a playlist feature).

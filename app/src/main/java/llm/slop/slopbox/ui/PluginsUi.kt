@@ -53,7 +53,6 @@ object PluginList {
             Plugin("lastfm_scrobbler", Screen.PluginScrobbler),
             Plugin("lrcplayer", Screen.PluginLrc),
             Plugin("random_folder_advance_config", Screen.PluginRfa),
-            Plugin("track_rater", Screen.PluginRater),
         ),
     )
     val all: List<Plugin> get() = categories.flatMap { it.second }

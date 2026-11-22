@@ -459,6 +459,7 @@ class SettingsStore private constructor(private val context: Context, val catalo
             SlopBoxSettings.SWIPE_TRACKS, SlopBoxSettings.SWIPE_PLAYLIST, SlopBoxSettings.DOUBLE_TAP,
             SlopBoxSettings.LONG_PRESS, SlopBoxSettings.EDGE_VOLUME, SlopBoxSettings.HAPTICS,
             SlopBoxSettings.ART_ACCENT, "wps", SlopBoxSettings.FLAT, SlopBoxSettings.TEXT_SIZE, SlopBoxSettings.BOTTOM_NAV,
+            SlopBoxSettings.RATER_SKIP_RATED, SlopBoxSettings.RATER_NEXT,
         )
 
         @Volatile private var instance: SettingsStore? = null
@@ -496,6 +497,8 @@ object SlopBoxSettings {
     const val FLAT = "slopbox flat style"
     const val TEXT_SIZE = "slopbox text size"
     const val BOTTOM_NAV = "slopbox navigation at bottom"
+    const val RATER_SKIP_RATED = "slopbox rater skip rated"
+    const val RATER_NEXT = "slopbox rater next after rating"
 
     val ALL: List<Extra> = listOf(
         Bool(SWIPE_TRACKS, "Swipe Art to Change Track", true),
@@ -508,6 +511,9 @@ object SlopBoxSettings {
         Bool(FLAT, "Flat Style", false),
         Choice(TEXT_SIZE, "Text Size", listOf("Small", "Normal", "Large", "Huge"), listOf("small", "normal", "large", "huge"), 1),
         Bool(BOTTOM_NAV, "Navigation at Bottom", false),
+        // The Rater While Playing Screen's two settings (also in its context menu).
+        Bool(RATER_SKIP_RATED, "Rater: Skip Rated Tracks", true),
+        Bool(RATER_NEXT, "Rater: Next Track After Rating", true),
     )
 
     /** Text Size as a scale for type and line heights. */

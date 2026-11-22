@@ -90,7 +90,7 @@ The **C** button (or a long-press) opens the WPS context menu:
 
 **The WPS Hotkey** (*General Settings › While Playing Screen › WPS Hotkey*)
 is run by holding the **C** button. Set it to *Open Plugin* and choose a
-plugin, such as the Track Rater, to open it with one press.
+plugin, such as the LRC Player, to open it with one press.
 
 ## A-B repeat
 
@@ -133,6 +133,7 @@ saved in Rockbox's `wps` setting, under the names in brackets.
   the car or the gym.
 - **Minimal** (`slop-minimal`): no art; the track lines, the progress bar,
   skip and play/pause only.
+- **Rater** (`slop-rater`): Minimal with keys for rating, described below.
 
 The gestures, the pop-up and the controls work the same way in every
 layout. When the phone is turned sideways, every layout puts the art and
@@ -141,3 +142,33 @@ track on the left and the progress bar and controls on the right.
 **Album Art Colours** (*Theme Settings › SlopBox*, off by default) take the
 bar and button colours from the album art while the playing screen is
 showing, and go back to your theme's colours everywhere else.
+
+## The Rater layout
+
+SlopBox's own layout, not a Rockbox skin, for rating a large collection
+quickly, for example to decide what to keep. Choose **Rater** in *Theme
+Settings › While Playing Screen*, then play what you want to rate: a
+playlist from the Playlist Catalogue, a folder, or an artist or album from
+the database.
+
+Under the track lines it shows the track's stars (or *unrated*). Above the
+skip and play buttons is one large key for each rating from 1 to 5 stars,
+and **Undo**, which puts the last rating back. A tap on a star key saves
+the rating (stored as Rockbox's rating, stars × 2, the value *Set Song
+Rating* sets) and, with *Next Track After Rating* on, moves to the next
+unrated track. Tracks must be in the database to be rated (see [The
+database](06-database.md)). After each rating SlopBox writes
+`database_changelog.txt` (*Export Modifications*) to your music folder, so
+other tools can read your ratings off the card.
+
+While Rater is the layout, the context menu has two more items, both on by
+default (they're also in *Theme Settings › SlopBox*):
+
+- **Skip Rated Tracks**: whenever the player moves to another track (the
+  track ends, you press ⏭, or you swipe), it passes over tracks that
+  already have a rating.
+- **Next Track After Rating**: a rating moves on to the next track.
+
+To hear a track in steps, set *Playback Settings › Skip Length*: the ⏮ and
+⏭ buttons then jump back and forward by that much. A swipe across the track
+still changes track on this layout.

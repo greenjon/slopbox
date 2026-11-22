@@ -33,9 +33,9 @@ database (Rockbox's `tagnavi.config` menus, with runtime data and ratings),
 playlists, bookmarks, cuesheets, A-B repeat, the sleep timer, the Quick
 Screen, Shortcuts, a customisable main menu and the System menu; and the
 music plugins Random Folder Advance, LRC Player, Last.fm Logger and Alarm
-Clock, plus SlopBox's own Track Rater. The interface is built for touch: a
+Clock. The interface is built for touch: a
 mini-player on every list, gestures on the playing screen, a draggable scroll
-bar, four playing-screen layouts, and Rockbox's theme colours with a colour
+bar, five playing-screen layouts (one of them, Rater, for rating tracks a tap at a time), and Rockbox's theme colours with a colour
 picker and bundled themes. Playback runs in a Media3 session service, so it keeps playing with
 the screen off, shows a media notification, answers
 headset/Bluetooth/lock-screen buttons, handles audio focus and pauses when
@@ -102,8 +102,9 @@ Quick Screen items. Plugins are ported one at a time in Kotlin: so far
 `random_folder_advance_config` (with Rockbox's `folder_advance_list.dat`)
 `lrcplayer` (.lrc/.lrc8/.snc/.txt and ID3 SYLT/USLT lyrics, word wipe) and
 `lastfm_scrobbler` (playback log to an Audioscrobbler `.scrobbler.log`) and
-`alarmclock`; plus `track_rater`, SlopBox's own (one tap per star, then the next
-unrated track; the ratings go to `database_changelog.txt` on the card).
+`alarmclock`. Rating tracks is the Rater playing-screen layout (`slop-rater`:
+one tap per star, then the next unrated track; the ratings go to
+`database_changelog.txt` on the card).
 
 ## Layout
 

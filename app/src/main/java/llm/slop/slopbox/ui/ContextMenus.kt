@@ -348,6 +348,17 @@ fun WpsContextMenu(controller: MediaController?, nav: Nav, browser: BrowserState
             if (store.int("gather runtime data") != 0 && playingId != null && llm.slop.slopbox.ui.db.TagDb.contains(playingId)) item {
                 RockRow(str(ctx, "LANG_MENU_SET_RATING"), icon = G.Cursor) { rating = true }
             }
+            // SlopBox: the Rater layout's settings, while it's the While Playing Screen.
+            if (Rater.active(store)) {
+                for ((cfg, label) in listOf(llm.slop.slopbox.SlopBoxSettings.RATER_SKIP_RATED to "Skip Rated Tracks",
+                    llm.slop.slopbox.SlopBoxSettings.RATER_NEXT to "Next Track After Rating")) item {
+                    var on by remember { mutableStateOf(store.int(cfg) != 0) }
+                    RockRow(label, icon = G.Config, trailing = if (on) "On" else "Off") {
+                        store.catalog.byCfg[cfg]?.let { store.set(it, if (on) 0 else 1) }
+                        on = store.int(cfg) != 0
+                    }
+                }
+            }
             item { RockRow(str(ctx, "LANG_BOOKMARK_MENU"), icon = G.Config) { nav.pop(); nav.push(Screen.Bookmarks) } }
             if (cue != null) item { RockRow(str(ctx, "LANG_BROWSE_CUESHEET"), icon = G.Cursor) { nav.pop(); nav.push(Screen.Cuesheet) } }
             val ctxItems = WpsContext.items(store)

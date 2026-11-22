@@ -10,7 +10,7 @@ computer or a file manager:
 | File | What |
 |---|---|
 | `Playlists/` | The Playlist Catalogue (`.m3u8` files) |
-| `database_changelog.txt` | Runtime data and ratings, from *Export Modifications* and the Track Rater |
+| `database_changelog.txt` | Runtime data and ratings, from *Export Modifications* and the Rater layout |
 | `.scrobbler.log` | From the Last.fm Logger plugin |
 | `folder_advance_list.txt`, `folder_advance_dir.txt` | Random Folder Advance's text list and scan filter |
 | `.cfg` files | Wherever you saved them with *Manage Settings* |
@@ -19,7 +19,7 @@ computer or a file manager:
 `config.cfg` (your settings), the database, the resume state, bookmarks
 (`bookmarks/`, `most-recent.bmark`), the playback log, `shortcuts.txt`,
 Random Folder Advance's `folder_advance_list.dat`, and each plugin's
-settings (`lastfm_scrobbler.cfg`, `lrcplayer.cfg`, `track_rater.cfg`).
+settings (`lastfm_scrobbler.cfg`, `lrcplayer.cfg`).
 Uninstalling SlopBox deletes these. To keep your settings, save them with
 *Manage Settings › Save .cfg File* first, and your ratings and play counts
 with *Export Modifications*.

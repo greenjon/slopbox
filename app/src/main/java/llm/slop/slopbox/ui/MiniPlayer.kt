@@ -52,7 +52,7 @@ import kotlinx.coroutines.delay
 import llm.slop.slopbox.SettingsStore
 
 /** Screens that already show what's playing, so they get no mini-player. */
-private val SHOWS_TRACK = setOf(Screen.NowPlaying, Screen.AlbumArt, Screen.PluginLrc, Screen.PluginRater)
+private val SHOWS_TRACK = setOf(Screen.NowPlaying, Screen.AlbumArt, Screen.PluginLrc)
 
 /** Where Rockbox's Status Bar setting puts the mini-player: 0 off, 1 top, 2 bottom. */
 @Composable

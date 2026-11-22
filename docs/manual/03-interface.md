@@ -67,7 +67,7 @@ places it: **Bottom** (the default), **Top**, or **Off**. With it off, the
 Files and Database title bars get a ▶ button that opens the playing screen.
 
 It's hidden on screens that already show the track: the While Playing
-Screen, the album art viewer, the LRC Player and the Track Rater.
+Screen, the album art viewer and the LRC Player.
 
 ## The title bar
 

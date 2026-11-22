@@ -383,9 +383,20 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
     private fun followingIndex(from: Int = index): Int? = when {
         entries.isEmpty() || from < 0 -> null
         repeat == 2 -> from                        // One
-        from + 1 < entries.size -> from + 1
-        repeat == 1 -> 0                           // All
-        else -> null                               // Off, A-B; Shuffle reshuffles at the end
+        else -> unratedFrom(from + 1)
+            ?: if (repeat == 1) unratedFrom(0) else null   // All; Off, A-B; Shuffle reshuffles at the end
+    }
+
+    /**
+     * SlopBox Rater layout with Skip Rated Tracks on: the first entry from [i]
+     * that has no rating; otherwise just [i]. Null past the end.
+     */
+    private fun unratedFrom(i: Int): Int? {
+        var j = i
+        if (llm.slop.slopbox.ui.Rater.skipping(store)) {
+            while (j < entries.size && llm.slop.slopbox.ui.Rater.rated(entries[j].item.mediaId)) j++
+        }
+        return j.takeIf { it < entries.size }
     }
 
     // ---- Audio focus -------------------------------------------------------
@@ -1026,8 +1037,9 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
      *  folder, else just the "no more" beep. */
     private fun nextTrack() {
         currentCue?.skip(1, position)?.let { return seekWithin(it) }        // curr_cuesheet_skip()
+        val next = unratedFrom(index + 1)
         when {
-            index + 1 < entries.size -> { beep(noMore = false); jumpTo(index + 1, 0) }
+            next != null -> { beep(noMore = false); jumpTo(next, 0) }
             repeat == 3 -> {
                 beep(noMore = false)
                 trackFinished(entries.getOrNull(index), position, autoSkip = false)

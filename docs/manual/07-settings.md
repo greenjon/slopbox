@@ -160,7 +160,7 @@ draws its own screens, so here Theme Settings set its colours and layout.
   *Other theme file…* loads a theme `.cfg` of your own, such as one saved
   with *Manage Settings › Save Theme Settings*.
 - **While Playing Screen**: the playing screen's layout: Cabbie, Big Art,
-  Large or Minimal. See [Layouts](04-while-playing-screen.md#layouts).
+  Large, Minimal or Rater. See [Layouts](04-while-playing-screen.md#layouts).
 - **Show Icons**: icons in front of list lines.
 - **Status-/Scrollbar**: *Scroll Bar* (Off, Left, Right), *Scroll Bar
   Width*, and *Status Bar*, which places the mini-player (Off, Top, Bottom).
@@ -213,6 +213,9 @@ doesn't have:
   text.
 - **Navigation at Bottom**: moves each screen's title bar to the bottom of
   the screen.
+- **Rater: Skip Rated Tracks**, **Rater: Next Track After Rating**: the
+  [Rater layout](04-while-playing-screen.md#the-rater-layout)'s two
+  settings, also in its context menu. On by default.
 
 ## Time & Date
 

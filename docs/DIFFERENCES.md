@@ -199,7 +199,7 @@ Anything new goes here in the same change that introduces it.
 - **Catalogue subfolders.** Rockbox's catalogue lists only the playlists in
   the catalog folder itself; its filter hides folders. SlopBox lists
   subfolders too (folders first, by name), and you can open them in the
-  catalogue, Add to Existing Playlist and the Track Rater's Play Playlist.
+  catalogue and Add to Existing Playlist.
   Why: grouping many playlists into folders is useful, and showing folders
   doesn't stop the list from being playlists only. Folders in the catalogue
   have no context menu; make, rename or delete them in the file browser.
@@ -321,20 +321,6 @@ Anything new goes here in the same change that introduces it.
 - **Alarm Clock.** It counts down only while its screen is showing, so it
   keeps the phone's screen on while it waits (a Rockbox player sits in the
   plugin the same way). Touch uses the plugin library's 3x3 grid.
-- **Track Rater** (`track_rater`). Not a Rockbox plugin: SlopBox's own, for
-  rating a big collection quickly. It shows the playing track with one key
-  per star (1 to 5), stored as the Rockbox rating stars × 2, the same value
-  Set Song Rating sets. After each rating it moves to the next unrated track
-  and exports `database_changelog.txt` (Export Modifications) to the music
-  folder, so the ratings reach the card without a trip to the Database
-  menu. It also has jump keys (a set number of seconds, its own setting
-  rather than Skip Length), Undo, and Play Playlist, which plays a Playlist
-  Catalogue playlist sorted by artist, album, year or title, or shuffled,
-  without its rated tracks. Changing the order also sorts the queue that's
-  playing, keeping the current track. Play Playlist (and a new order) turn
-  the player's Shuffle off, since Shuffle would reshuffle the new playlist
-  and lose that order. Its options are kept in `track_rater.cfg` in
-  SlopBox's own storage. Tracks must be in the database to be rated.
 
 ## Interface
 
@@ -391,14 +377,32 @@ Anything new goes here in the same change that introduces it.
   saved in the `wps` setting under a skin name: Cabbie (`cabbiev2`, the
   default), Big Art (`slop-bigart`: the art across the screen with the
   track over it, on a blurred copy of the art on Android 12 and later),
-  Large (`slop-large`: no art, big type and buttons) and Minimal
-  (`slop-minimal`: no art, only skip and play/pause). On every layout the
-  time left can be tapped to show the track's length instead, the progress
+  Large (`slop-large`: no art, big type and buttons), Minimal
+  (`slop-minimal`: no art, only skip and play/pause) and Rater
+  (`slop-rater`, below). On every layout the time left can be tapped to show the track's length instead, the progress
   bar thickens while it's dragged, and the Cabbie layout shows the codec
   line under the artist when there is art. Theme Settings › SlopBox ›
   Album Art Colours on While Playing Screen (off by default) takes the
   line selector colours, and so the bars and buttons, from the art while
   that screen is showing.
+- **Rater layout** (`slop-rater`). SlopBox's own, for rating a big
+  collection quickly; a Rockbox skin can show a rating (`%rr`) but has no
+  way to set one. It is Minimal with the track's stars under it and one key
+  per star (1 to 5), stored as the Rockbox rating stars × 2, the same value
+  Set Song Rating sets, plus Undo. Each rating exports
+  `database_changelog.txt` (Export Modifications) to the music folder, so
+  the ratings reach the card without a trip to the Database menu. Tracks
+  must be in the database to be rated. While it's the While Playing Screen
+  the context menu has two items Rockbox doesn't, also in Theme Settings ›
+  SlopBox, both on by default: Skip Rated Tracks (the player passes over
+  rated tracks when it changes track, whether a track ends, Next is
+  pressed or a hop runs past the end) and Next Track After Rating. On this
+  layout a swipe across the track always changes track (to the next unrated one
+  with Skip Rated on), while the buttons keep Rockbox's skip rules, so with
+  Skip Length set they hop through the track. It replaces the Track Rater
+  plugin of 1.1.0: its Play Playlist is the Playlist Catalogue or the file
+  browser, and its Order is Shuffle or the database's views. Sorting the
+  queue that's playing by artist, album, year or title went with it.
 - **Look.** Theme Settings › SlopBox › Flat Style (off by default) drops
   the gloss from bars, buttons and icons. Text Size (Small, Normal, Large,
   Huge) scales the type and line heights; it's SlopBox's own setting, and
@@ -421,7 +425,7 @@ Anything new goes here in the same change that introduces it.
   album art, title, artist and play/pause (hold: stop). Tapping it, or
   swiping from it into the screen, opens the While Playing Screen. It is
   hidden on screens that already show the track (While Playing Screen,
-  album art, LRC Player, Track Rater). The default is Bottom (Rockbox's is
+  album art, LRC Player). The default is Bottom (Rockbox's is
   Top), so a `.cfg` without a Status Bar line gives Bottom. The Files and
   Database title bars' ▶ button appears only with the Status Bar off.
 - **Scroll bar.** Scroll Bar (Off, Left, Right) and Scroll Bar Width work

@@ -23,7 +23,8 @@ for the parts that matter to the music:
 - **Playlists and bookmarks:** Rockbox's Playing Next menu, `.m3u`/`.m3u8`
   files, the Playlist Catalogue, bookmarks, cuesheets and A-B repeat.
 - **Plugins:** music plugins ported from Rockbox (Random Folder Advance, LRC
-  Player, Last.fm Logger, Alarm Clock), plus SlopBox's own Track Rater.
+  Player, Last.fm Logger, Alarm Clock), plus SlopBox's own Rater layout for
+  rating tracks.
 
 The parts that belong to Android are Android's own. The screens are drawn by
 SlopBox for a touchscreen, in the style of Rockbox's cabbiev2 theme.

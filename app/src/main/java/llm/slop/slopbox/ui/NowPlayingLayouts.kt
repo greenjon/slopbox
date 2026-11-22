@@ -53,6 +53,7 @@ enum class WpsLayout(val skin: String, val title: String, val about: String) {
     BIG_ART("slop-bigart", "Big Art", "Art across the screen with the track over it, on a blurred backdrop"),
     LARGE("slop-large", "Large", "No art; big type and big buttons, for the car or the gym"),
     MINIMAL("slop-minimal", "Minimal", "No art; the track, the bar, skip and play"),
+    RATER("slop-rater", "Rater", "Minimal, with keys to give the track 1 to 5 stars"),
     ;
 
     companion object {
@@ -72,6 +73,7 @@ internal fun AltMiddle(
     album: String, title: String, artist: String, codec: String, next: String,
     gestures: Modifier,
     overlay: (@Composable () -> Unit)?,
+    mediaId: String? = null,
 ) {
     Box(Modifier.fillMaxSize()) {
         when {
@@ -116,6 +118,7 @@ internal fun AltMiddle(
                 Line(album, scroll = true, dim = true)
                 Line(title, scroll = true, big = true)
                 Line(artist, scroll = true)
+                if (layout == WpsLayout.RATER) RaterStatus(mediaId)
             }
         }
         if (overlay != null) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(140.dp)

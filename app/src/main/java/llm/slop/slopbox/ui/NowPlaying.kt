@@ -182,7 +182,10 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
     var nextTags by remember { mutableStateOf(Tags()) }
     val curUri = s.item?.requestMetadata?.mediaUri
     val nextUri = s.next?.requestMetadata?.mediaUri
-    LaunchedEffect(curUri) { tags = s.item?.let { TagReader.read(ctx, it, withArt = true) } ?: Tags() }
+    LaunchedEffect(curUri) {
+        Rater.message = null
+        tags = s.item?.let { TagReader.read(ctx, it, withArt = true) } ?: Tags()
+    }
     LaunchedEffect(nextUri) { nextTags = s.next?.let { TagReader.read(ctx, it, withArt = false) } ?: Tags() }
 
     val dirName = s.item?.requestMetadata?.extras?.getString(MusicTree.EXTRA_DIR_NAME).orEmpty()
@@ -249,7 +252,7 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
             val toPlaylistAlt = Modifier.artGestures(controller, nav, ctx, haptics)
             val nextLine = if (s.next != null) "Next: ${listOf(nextArtist, nextTitle).filter { it.isNotEmpty() }.joinToString(" - ")}" else ""
             if (layout != WpsLayout.CABBIE) {
-                AltMiddle(layout, art, album, title, artist, s.codecLine, nextLine, toPlaylistAlt, overlay)
+                AltMiddle(layout, art, album, title, artist, s.codecLine, nextLine, toPlaylistAlt, overlay, s.item?.mediaId)
             } else {
             val artSize: Dp = if (landscape) min(maxWidth * 0.8f, maxHeight * 0.62f) else min(maxWidth * 0.68f, maxHeight * 0.48f)
             Column(Modifier.fillMaxSize()) {
@@ -360,6 +363,8 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
             }
         }
 
+        if (layout == WpsLayout.RATER) RaterKeys(controller, s.item?.mediaId)
+
         // Bottom row.
         var seeking by remember { mutableStateOf<G?>(null) }
         var ffStep by remember { mutableStateOf(1000L) }
@@ -395,8 +400,8 @@ fun NowPlayingScreen(controller: MediaController?, nav: Nav) {
                 )
             }
             Spacer(Modifier.weight(0.5f))
-            // Minimal: only skip and play/pause.
-            if (layout != WpsLayout.MINIMAL) {
+            // Minimal and Rater: only skip and play/pause.
+            if (layout != WpsLayout.MINIMAL && layout != WpsLayout.RATER) {
             CtrlButton(Modifier.weight(1f), onTap = { volumeAt = System.currentTimeMillis() }) {
                 Glyph(G.Volume, Modifier.size(glyph), level = s.volume)
             }
@@ -692,7 +697,19 @@ private fun Modifier.artGestures(
                         kotlin.math.abs(dx) > kotlin.math.abs(dy) && kotlin.math.abs(dx) > min &&
                             on(llm.slop.slopbox.SlopBoxSettings.SWIPE_TRACKS) ->
                             // Swipe left (content moves left) = next, as in most players.
-                            { haptics.press(); if (dx < 0) controller?.seekToNext() else controller?.seekToPrevious() }
+                            {
+                                haptics.press()
+                                // Rater: a swipe changes track even with Skip Length set (the buttons hop).
+                                val rater = Rater.active(store)
+                                controller?.let { c ->
+                                    when {
+                                        rater && dx < 0 -> Rater.next(ctx, c)
+                                        rater -> Rater.previous(c)
+                                        dx < 0 -> c.seekToNext()
+                                        else -> c.seekToPrevious()
+                                    }
+                                }
+                            }
                         dy < -min && kotlin.math.abs(dy) > kotlin.math.abs(dx) &&
                             on(llm.slop.slopbox.SlopBoxSettings.SWIPE_PLAYLIST) -> { haptics.press(); nav.push(Screen.Playlist) }
                     }

@@ -59,7 +59,7 @@ menu. The playing track is highlighted.
 - **Drag a track by its ≡ handle** (on the right) to move it.
 - **Hold** a track for its menu: Playing Next, Add to Playlist, Remove,
   Move (tap the track, then tap where it goes), Show Track Info, Shuffle,
-  Save, and Playlist Viewer Settings.
+  Sort Playlist, Save, and Playlist Viewer Settings.
 
 What each line shows follows *General Settings › Playlists › Playlist
 Viewer Settings*: *Show Icons*, *Show Indices* (the numbers) and *Track
@@ -68,8 +68,32 @@ name without its extension. Choose *Title from ID3 Tags* to see the tags'
 titles instead.
 
 The WPS context menu's *Current Playlist* submenu also has *Reshuffle*,
-*Save Current Playlist*, *Search in Playlist* and *Playing Time* (the total
-length and the time left).
+*Sort Playlist*, *Save Current Playlist*, *Search in Playlist* and *Playing
+Time* (the total length and the time left).
+
+### Sorting the playlist
+
+*Sort Playlist* puts the current playlist in order by its tags:
+
+- **Artist:** artist, then album, disc and track number.
+- **Album Artist:** album artist (or artist), then year, album, disc and
+  track number.
+- **Album:** album, then album artist, disc and track number.
+- **Title:** track title.
+- **Year:** year, then album artist, album, disc and track number.
+- **File Path:** the file's folder and name.
+
+Tracks with an empty tag go after the others, and the file path decides
+ties. Names compare without regard to case, with numbers in numeric order
+("Track 2" before "Track 10"). Tags come from the database; tracks that
+aren't in it are read from their files, which takes a moment for a long
+playlist.
+
+The playing track keeps playing wherever it lands, so the tracks sorted in
+front of it won't play unless Repeat is on. Queued tracks still waiting to
+play stay right after it. Sorting turns Shuffle off, and the sorted order
+becomes the playlist's own order: turning Shuffle on and off again comes
+back to it.
 
 ## Saved playlists
 

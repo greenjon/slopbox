@@ -97,6 +97,7 @@ fun PlaylistScreen(controller: MediaController?, nav: Nav) {
             onMove = { moving = i; menuFor = null },
             onShuffle = { llm.slop.slopbox.SlopPlayer.current?.reshuffle(); menuFor = null; version++ },
             onSave = { menuFor = null; saving = true },
+            onSort = { menuFor = null; version++ },
         )
         return
     }

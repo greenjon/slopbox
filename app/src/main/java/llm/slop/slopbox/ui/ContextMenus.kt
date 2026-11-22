@@ -730,7 +730,8 @@ fun PropertiesScreen(tree: Uri, doc: Doc, onBack: () -> Unit) {
 /**
  * Rockbox's playlist viewer menu for one track: Playing Next..., Add to
  * Playlist..., Remove, Move, Show Track Info, Shuffle, Save and Playlist
- * Viewer Settings. Shuffle asks first (yesno_pop_confirm).
+ * Viewer Settings. Shuffle asks first (yesno_pop_confirm). SlopBox adds Sort
+ * Playlist after Shuffle when [onSort] is given (the current playlist only).
  */
 @Composable
 fun ViewerTrackMenu(
@@ -741,6 +742,7 @@ fun ViewerTrackMenu(
     onMove: () -> Unit,
     onShuffle: () -> Unit,
     onSave: () -> Unit,
+    onSort: (() -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
     var page by remember { mutableStateOf("menu") }
@@ -754,6 +756,10 @@ fun ViewerTrackMenu(
                 onBack()
                 if (choice.replace) nav.toNowPlaying()
             }
+            return
+        }
+        "sort" -> {
+            SortPlaylistScreen(onBack = { page = "menu" }, onDone = { onSort?.invoke() })
             return
         }
         "shuffle" -> {
@@ -785,6 +791,7 @@ fun ViewerTrackMenu(
                 }
             }
             item { RockRow(str(ctx, "LANG_SHUFFLE"), icon = G.Cursor) { page = "shuffle" } }
+            if (onSort != null) item { RockRow(SORT_PLAYLIST, icon = G.Cursor) { page = "sort" } }
             item { RockRow(str(ctx, "LANG_SAVE"), icon = G.Cursor, onClick = onSave) }
             item {
                 RockRow(str(ctx, "LANG_PLAYLISTVIEWER_SETTINGS"), icon = G.Config) {

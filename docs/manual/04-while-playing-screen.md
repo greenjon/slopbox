@@ -72,8 +72,8 @@ Double-Tap off if that bothers you.
 
 The **C** button (or a long-press) opens the WPS context menu:
 
-- **Current Playlist:** view, save, reshuffle, and the playlist's playing
-  time
+- **Current Playlist:** view, save, reshuffle, sort, and the playlist's
+  playing time
 - **Add to Playlist…**
 - **Sound Settings**, **Playback Settings**
 - **Bookmarks:** create a bookmark, or list this playlist's bookmarks

@@ -1348,6 +1348,115 @@ class SlopPlayer(private val context: Context) : SimpleBasePlayer(Looper.getMain
         savePlaylist()
     }
 
+    // ---- SlopBox: Sort Playlist --------------------------------------------------
+
+    /** Orders Sort Playlist offers (a SlopBox addition: Rockbox can only unshuffle). */
+    enum class SortOrder(val label: String) {
+        ARTIST("Artist"), ALBUM_ARTIST("Album Artist"), ALBUM("Album"),
+        TITLE("Title"), YEAR("Year"), PATH("File Path"),
+    }
+
+    private class SortKey(
+        val artist: String, val albumArtist: String, val album: String, val title: String,
+        val year: Int, val disc: Int, val track: Int, val path: String,
+    )
+
+    private var sortJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * SlopBox: sort the playlist by tags. The sorted order becomes the natural
+     * order (shuffle goes off); the playing track keeps playing wherever it lands,
+     * and queued tracks still waiting to play stay right after it. Tags come from
+     * the database, or from the file for tracks not in it. [done] gets false if
+     * the playlist changed while the tags were being read (nothing is sorted).
+     */
+    fun sortPlaylist(order: SortOrder, done: (Boolean) -> Unit) {
+        val snapshot = entries.toList()
+        // Main thread: database lookups (in-memory) and tags already read.
+        val known = snapshot.map { e ->
+            val path = e.uri?.let { PlaybackMemory.pathOf(it) } ?: e.item.mediaId
+            llm.slop.slopbox.ui.db.TagDb.track(e.item.mediaId)?.let {
+                SortKey(it.artist, it.albumArtist, it.album, it.title, it.year, it.discNum, it.trackNum, path)
+            } ?: e.tags?.takeIf { e.tagsRead }?.let { keyOf(it, path) }
+        }
+        sortJob?.cancel()
+        sortJob = scope.launch {
+            val read = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                snapshot.mapIndexed { i, e ->
+                    if (known[i] != null || e.tagsRead) null
+                    else e.uri?.let { RockboxTagFile.read(context, it)?.tags }
+                }
+            }
+            if (entries.size != snapshot.size || entries.indices.any { entries[it] !== snapshot[it] }) {
+                done(false)
+                return@launch
+            }
+            val keys = HashMap<Entry, SortKey>()
+            snapshot.forEachIndexed { i, e ->
+                if (known[i] == null && !e.tagsRead) { e.tagsRead = true; e.tags = read[i] }
+                val path = e.uri?.let { PlaybackMemory.pathOf(it) } ?: e.item.mediaId
+                keys[e] = known[i] ?: e.tags?.let { keyOf(it, path) }
+                    ?: SortKey("", "", "", "", 0, 0, 0, path)
+            }
+            val cmp = sortComparator(order)
+            val current = entries.getOrNull(index)
+            val waiting = entries.filter { it.queued && it !== current }
+            val sorted = entries.filter { !it.queued || it === current }.sortedWith { a, b -> cmp.compare(keys[a]!!, keys[b]!!) }
+            entries.clear()
+            if (current == null) entries += waiting
+            for (e in sorted) {
+                entries += e
+                if (e === current) entries += waiting
+            }
+            index = current?.let { entries.indexOf(it) }?.coerceAtLeast(0) ?: 0
+            if (shuffled) {
+                // Clear the flag first so the settings listener doesn't unshuffle.
+                shuffled = false
+                Engine.setShuffle(false)
+                store.catalog.byCfg["shuffle"]?.let { store.set(it, 0) }
+            }
+            syncOriginal()
+            lastInsertPos = -1
+            playlistModified = true
+            queueFollowing()
+            invalidateState()
+            savePlaylist()
+            done(true)
+        }
+    }
+
+    private fun keyOf(t: Engine.RockboxTags, path: String) =
+        SortKey(t.artist, t.albumArtist, t.album, t.title, t.yearNum, t.discNum, t.trackNum, path)
+
+    /** Empty tags (and zero numbers) sort last; the path settles any tie. */
+    private fun sortComparator(order: SortOrder): Comparator<SortKey> {
+        fun text(f: (SortKey) -> String) = Comparator<SortKey> { a, b ->
+            val x = f(a); val y = f(b)
+            when {
+                x.isEmpty() || y.isEmpty() -> y.length.coerceAtMost(1) - x.length.coerceAtMost(1)
+                else -> llm.slop.slopbox.ui.db.NaturalOrder.compare(x, y)
+            }
+        }
+        fun num(f: (SortKey) -> Int) = Comparator<SortKey> { a, b ->
+            val x = f(a); val y = f(b)
+            when {
+                x <= 0 || y <= 0 -> y.coerceIn(0, 1) - x.coerceIn(0, 1)
+                else -> x.compareTo(y)
+            }
+        }
+        val albumArtist = text { it.albumArtist.ifEmpty { it.artist } }
+        val discTrack = num { it.disc }.then(num { it.track })
+        val path = text { it.path }
+        return when (order) {
+            SortOrder.ARTIST -> text { it.artist }.then(text { it.album }).then(discTrack)
+            SortOrder.ALBUM_ARTIST -> albumArtist.then(num { it.year }).then(text { it.album }).then(discTrack)
+            SortOrder.ALBUM -> text { it.album }.then(albumArtist).then(discTrack)
+            SortOrder.TITLE -> text { it.title }
+            SortOrder.YEAR -> num { it.year }.then(albumArtist).then(text { it.album }).then(discTrack)
+            SortOrder.PATH -> path
+        }.then(path)
+    }
+
     /** A queued track that has been left is removed (Rockbox playlist_next()). */
     private fun dropIfQueued(e: Entry?) {
         e ?: return

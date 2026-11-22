@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -430,7 +431,9 @@ fun CurrentPlaylistMenu(controller: MediaController?, nav: Nav) {
     var timing by remember { mutableStateOf(false) }
     var searching by remember { mutableStateOf(false) }
     var confirmShuffle by remember { mutableStateOf(false) }
+    var sorting by remember { mutableStateOf(false) }
     BackHandler(enabled = saving || timing || searching) { saving = false; timing = false; searching = false }
+    if (sorting) { SortPlaylistScreen(onBack = { sorting = false }, onDone = { sorting = false; nav.pop() }); return }
     if (saving) { SavePlaylistScreen(onDone = { saving = false }); return }
     if (timing) { PlayingTimeScreen(controller) { timing = false }; return }
     if (searching) { SearchPlaylistScreen(controller, nav) { searching = false }; return }
@@ -448,7 +451,45 @@ fun CurrentPlaylistMenu(controller: MediaController?, nav: Nav) {
         RockRow(str(ctx, "LANG_SEARCH_IN_PLAYLIST"), icon = G.Cursor) { searching = true }
         RockRow(str(ctx, "LANG_SAVE_DYNAMIC_PLAYLIST"), icon = G.Cursor) { saving = true }
         RockRow(str(ctx, "LANG_SHUFFLE_PLAYLIST"), icon = G.Cursor) { confirmShuffle = true }
+        RockRow(SORT_PLAYLIST, icon = G.Cursor) { sorting = true }
         RockRow(str(ctx, "LANG_PLAYING_TIME"), icon = G.Cursor) { timing = true }
+    }
+}
+
+const val SORT_PLAYLIST = "Sort Playlist"
+
+/**
+ * SlopBox: Sort Playlist (not in Rockbox). Pick an order, confirm, then wait
+ * while tags are read for tracks not in the database. [onDone] runs once the
+ * playlist is sorted (or the sort was given up because the playlist changed).
+ */
+@Composable
+fun SortPlaylistScreen(onBack: () -> Unit, onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    var pick by remember { mutableStateOf<SlopPlayer.SortOrder?>(null) }
+    var sorting by remember { mutableStateOf(false) }
+    val alive = remember { booleanArrayOf(true) }
+    DisposableEffect(Unit) { onDispose { alive[0] = false } }
+    val p = pick
+    if (p != null && !sorting) {
+        YesNo("Sort by ${p.label}", listOf(str(ctx, "LANG_ARE_YOU_SURE"))) { yes ->
+            val player = SlopPlayer.current
+            if (!yes || player == null) { pick = null; return@YesNo }
+            sorting = true
+            player.sortPlaylist(p) { ok ->
+                if (!ok) toast(ctx, "The playlist changed while sorting; try again.")
+                if (alive[0]) onDone()
+            }
+        }
+        return
+    }
+    BackHandler { onBack() }
+    Column(Modifier.fillMaxSize()) {
+        TitleBar(SORT_PLAYLIST, onBack = onBack)
+        if (sorting) ListNote("Sorting…")
+        else RockList(Modifier.fillMaxSize()) {
+            items(SlopPlayer.SortOrder.entries) { o -> RockRow(o.label, icon = G.Cursor) { pick = o } }
+        }
     }
 }
 

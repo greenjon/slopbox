@@ -227,6 +227,19 @@ Anything new goes here in the same change that introduces it.
   buffer.
 - **Queued tracks in the viewer.** They aren't drawn with Rockbox's separate
   queued icon.
+- **Sort Playlist.** A SlopBox addition, in the playlist viewer's track menu
+  and in WPS context menu › Current Playlist. Rockbox can only put a
+  playlist back in its file order (unshuffle); SlopBox sorts it by Artist,
+  Album Artist, Album, Title, Year or File Path, using the database's tags
+  (or the file's, for tracks not in it). The playing track keeps playing
+  where it lands, queued tracks still waiting stay right after it, shuffle
+  goes off, and the sorted order becomes the natural order that unshuffling
+  returns to. A bookmark made afterwards still names the folder or playlist
+  file, so loading it plays that in its own order, starting at the
+  bookmarked track.
+  Why: Rockbox keeps the playlist on disk to fit small players, where
+  sorting by tags would be slow; an Android phone has the memory and the
+  database to do it at once.
 
 ## Context menus and files
 

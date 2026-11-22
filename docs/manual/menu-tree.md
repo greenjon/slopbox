@@ -235,3 +235,5 @@ SlopBox adds a **SlopBox** menu at the end of Theme Settings:
   - Flat Style
   - Text Size
   - Navigation at Bottom
+  - Rater: Skip Rated Tracks
+  - Rater: Next Track After Rating
